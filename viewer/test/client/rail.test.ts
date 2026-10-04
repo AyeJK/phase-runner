@@ -24,7 +24,7 @@ import {
   type RailSprint,
   type RailView,
 } from '../../src/client/rail/derive.js';
-import { kanbanColumn } from '../../src/client/board/derive.js';
+import { kanbanColumn, kanbanLanes } from '../../src/client/board/derive.js';
 import { notStartedTasks } from '../../src/client/data/status.js';
 import { phaseBadge, taskIcon } from '../../src/client/sprint/status.js';
 import { RUN_LOGS } from '../fixtures/index.js';
@@ -799,6 +799,21 @@ describe('filter groups', () => {
     const groups = Object.fromEntries(project.phases.map((p) => [p.number, phaseGroup(project, p)]));
     expect(groups).toEqual({ 2: 'complete', 3: 'progress', 5: 'future', 6: 'progress', 7: 'progress' });
     expect(phaseGroupCounts(project)).toEqual({ all: 5, progress: 3, complete: 1, future: 1 });
+    // The kanban's lanes, left to right: not started, in progress, complete.
+    expect(kanbanLanes(project).map((l) => [l.label, l.columns.map((c) => c.number)])).toEqual([
+      ['Not started', [5]],
+      ['In progress', [3, 6, 7]],
+      ['Complete', [2]],
+    ]);
+  });
+
+  it('keeps a lane with no phases, empty', () => {
+    const project = makeProject([{ n: 3, sprints: [['3.1', 'x-']] }]);
+    expect(kanbanLanes(project).map((l) => [l.group, l.columns.length])).toEqual([
+      ['future', 0],
+      ['progress', 1],
+      ['complete', 0],
+    ]);
   });
 
   it('keeps a complete phase with a sprint implementing again in progress', () => {

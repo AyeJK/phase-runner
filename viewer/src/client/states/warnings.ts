@@ -17,7 +17,7 @@ export function samePath(file: string): string {
   return /^[a-z]:\//i.test(slashed) ? slashed[0]!.toLowerCase() + slashed.slice(1) : slashed;
 }
 
-/** How many warnings are about the phase file or its run log (the kanban column's "N warnings" tag). */
+/** How many warnings are about the phase file or its run log (the kanban card's "N warnings" tag). */
 export function phaseWarnings(warnings: readonly Warning[], phaseFile: string, runFile: string | null): number {
   const files = new Set([samePath(phaseFile), ...(runFile ? [samePath(runFile)] : [])]);
   return warnings.reduce((n, w) => (files.has(samePath(w.file)) ? n + 1 : n), 0);

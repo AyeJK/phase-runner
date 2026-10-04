@@ -1,32 +1,33 @@
 /**
  * The phase kanban, home at `/` (design-system.md "Phase kanban", "Slide-in
- * panel"): one equal-width column per phase that passes the filter, and the
- * slide-in panel for `?phase=N`.
+ * panel"): three lanes, left to right (Not started, In progress, Complete),
+ * each with a card per phase in that group, and the slide-in panel for
+ * `?phase=N`.
  *
- * - Columns share the board's tracks: there's one track per phase whatever
- *   the filter, so hiding columns never resizes the others. Tracks are at
- *   least 180px; when the phases don't fit, the board scrolls sideways
- *   inside itself, never the page.
- * - Clicking a column pushes `/?phase=N` (marked in `history.state`) and the
+ * - The lanes are equal width and always all there; a lane with no phases
+ *   says "No phases". Each lane's heading carries its phase count. Lanes are
+ *   at least 240px wide; when the three don't fit, the board scrolls
+ *   sideways inside itself, never the page.
+ * - Clicking a card pushes `/?phase=N` (marked in `history.state`) and the
  *   panel slides in. Closing (back arrow, scrim, Escape) goes Back when the
  *   board opened the panel, so the browser's Back and Forward stay in step;
  *   a panel reached by a link (`/?phase=N` typed or shared) is closed by
  *   replacing the entry with `/`. The browser's Back closes it too.
- * - When the panel closes, focus returns to the column that opened it.
+ * - When the panel closes, focus returns to the card that opened it.
  * - Warnings on files that belong to no phase show as banners above the
- *   board; a phase's own warnings show as a tag on its column and as banners
+ *   board; a phase's own warnings show as a tag on its card and as banners
  *   in its panel.
  *
- * Test hooks: `kanban`, `kan-board`, `board-empty`, plus the column's and
+ * Test hooks: `kanban`, `kan-board`, `section[data-lane]` (`future`,
+ * `progress`, `complete`), `lane-count`, `lane-empty`, plus the card's and
  * the panel's.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Project } from '../../core/model.js';
-import type { PhaseFilter } from '../rail/derive.js';
 import { paths, useRouter } from '../shell/router.js';
 import { ParseWarnings } from '../states/ParseWarnings.js';
 import { phaseFiles, samePath } from '../states/warnings.js';
-import { EMPTY_FILTER_TEXT, kanbanColumns, matchesFilter } from './derive.js';
+import { kanbanLanes } from './derive.js';
 import { KanbanColumn, PANEL_ENTRY } from './KanbanColumn.js';
 import { SlidePanel } from './SlidePanel.js';
 import './board.css';
@@ -35,7 +36,6 @@ interface BoardProps {
   project: Project;
   /** The phase whose panel is open, or `null`. */
   phase: number | null;
-  show: PhaseFilter;
   /** App-wide banners (connection lost), repeated inside the panel. */
   banner?: ReactNode;
 }
@@ -68,13 +68,12 @@ function useSlide(open: number | null): { phase: number | null; closing: boolean
   return { phase: open ?? shown, closing: open === null && shown !== null };
 }
 
-export function Board({ project, phase, show, banner }: BoardProps) {
+export function Board({ project, phase, banner }: BoardProps) {
   const { navigate } = useRouter();
-  const columns = useMemo(() => kanbanColumns(project), [project]);
-  const visible = columns.filter((c) => matchesFilter(c.group, show));
+  const lanes = useMemo(() => kanbanLanes(project), [project]);
   const slide = useSlide(phase);
 
-  // Files with warnings that no phase owns (a phase's own show in its column and panel).
+  // Files with warnings that no phase owns (a phase's own show on its card and in its panel).
   const orphanFiles = useMemo(() => {
     const owned = new Set(project.phases.flatMap((p) => phaseFiles(project, p)).map(samePath));
     return [...new Set(project.warnings.map((w) => w.file))].filter((f) => !owned.has(samePath(f)));
@@ -83,10 +82,10 @@ export function Board({ project, phase, show, banner }: BoardProps) {
   const close = useCallback(() => {
     const state = window.history.state as typeof PANEL_ENTRY | null;
     if (state?.panel) window.history.back();
-    else navigate(paths.board({ show }), { replace: true, scroll: false });
-  }, [navigate, show]);
+    else navigate(paths.board(), { replace: true, scroll: false });
+  }, [navigate]);
 
-  // Focus goes back to the column that opened the panel.
+  // Focus goes back to the card that opened the panel.
   const opened = useRef<number | null>(phase);
   useEffect(() => {
     if (phase !== null) {
@@ -98,8 +97,6 @@ export function Board({ project, phase, show, banner }: BoardProps) {
     if (n !== null) document.querySelector<HTMLElement>(`[data-kan-col="${n}"]`)?.focus();
   }, [phase]);
 
-  const board = { '--cols': Math.max(columns.length, 1) } as CSSProperties;
-
   return (
     <>
       <main className="kanban" id="main" inert={phase !== null} data-testid="kanban">
@@ -109,17 +106,27 @@ export function Board({ project, phase, show, banner }: BoardProps) {
             <ParseWarnings project={project} files={orphanFiles} />
           </div>
         )}
-        {visible.length === 0 && show !== 'all' ? (
-          <p className="board-empty" data-testid="board-empty">
-            {EMPTY_FILTER_TEXT[show]}
-          </p>
-        ) : (
-          <div className="kan-board" style={board} data-testid="kan-board">
-            {visible.map((column) => (
-              <KanbanColumn key={column.number} column={column} open={slide.phase === column.number} show={show} />
-            ))}
-          </div>
-        )}
+        <div className="kan-board" data-testid="kan-board">
+          {lanes.map((lane) => (
+            <section className="kan-lane" key={lane.group} aria-labelledby={`lane-${lane.group}`} data-lane={lane.group}>
+              <h2 className="kan-lane-head" id={`lane-${lane.group}`}>
+                {lane.label}
+                <span className="kan-lane-count" data-testid="lane-count">
+                  {lane.columns.length}
+                </span>
+              </h2>
+              {lane.columns.length === 0 ? (
+                <p className="kan-lane-empty" data-testid="lane-empty">
+                  No phases
+                </p>
+              ) : (
+                lane.columns.map((column) => (
+                  <KanbanColumn key={column.number} column={column} open={slide.phase === column.number} />
+                ))
+              )}
+            </section>
+          ))}
+        </div>
       </main>
       {slide.phase !== null && (
         <SlidePanel project={project} number={slide.phase} closing={slide.closing} onClose={close} banner={banner} />

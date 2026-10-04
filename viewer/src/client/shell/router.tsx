@@ -10,8 +10,8 @@
  * | `/live`       | `live`: redirected by App once the first snapshot arrives, to `/?phase={N, else running, else default}` |
  * | anything else | `unknown` |
  *
- * Both views take `?show=progress | complete | future` (the filter row; no
- * `show` is All).
+ * The list view takes `?show=progress | complete | future` (the filter row;
+ * no `show` is All). The kanban has no filter: its lanes are the groups.
  *
  * Old routes redirect as the location is read, replacing the history entry:
  * `/overview` → `/`, `/phase/:n` → `/?phase=n`, `/sprint/:id` →
@@ -43,7 +43,7 @@ import { DEFAULT_VIEW, rememberedView } from './viewPref.js';
 
 /** A matched route. */
 export type Route =
-  | { name: 'board'; phase: number | null; show: PhaseFilter }
+  | { name: 'board'; phase: number | null }
   | { name: 'list'; phase: number | null; show: PhaseFilter }
   | { name: 'live'; phase: number | null }
   | { name: 'unknown' };
@@ -123,7 +123,7 @@ export function redirectPath(location: Location): string | null {
 /** Match a location to a {@link Route}. */
 export function matchRoute(location: Pick<Location, 'pathname' | 'search'>): Route {
   const path = cleanPath(location.pathname);
-  if (path === '/') return { name: 'board', phase: readPhase(location.search), show: readShow(location.search) };
+  if (path === '/') return { name: 'board', phase: readPhase(location.search) };
   if (path === '/list') return { name: 'list', phase: readPhase(location.search), show: readShow(location.search) };
   if (path === '/live') return { name: 'live', phase: readPhase(location.search) };
   return { name: 'unknown' };
@@ -186,7 +186,7 @@ export function useRouter(): RouterValue {
   return value;
 }
 
-/** A view's query: the selected (or open) phase and the filter. */
+/** A view's query: the selected (or open) phase and, in the list view, the filter. */
 export interface ViewQuery {
   phase?: number | null;
   show?: PhaseFilter;
@@ -203,7 +203,7 @@ function viewSearch({ phase, show }: ViewQuery): string {
 /** Paths for each route, so links are written one way. */
 export const paths = {
   /** The kanban, with phase N's panel open when `phase` is set. */
-  board: (query: ViewQuery = {}): string => `/${viewSearch(query)}`,
+  board: (query: Pick<ViewQuery, 'phase'> = {}): string => `/${viewSearch(query)}`,
   /** The list view, with phase N selected when `phase` is set. */
   list: (query: ViewQuery = {}): string => `/list${viewSearch(query)}`,
   /** A phase: its slide-in panel over the kanban. */

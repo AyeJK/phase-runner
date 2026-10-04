@@ -122,7 +122,7 @@ function Main({ snapshot, route, banner }: { snapshot: ViewerSnapshot; route: Ro
   }
   switch (route.name) {
     case 'board':
-      return <Board project={project} phase={route.phase} show={route.show} banner={banner} />;
+      return <Board project={project} phase={route.phase} banner={banner} />;
     case 'list':
       return <ListView project={project} phase={route.phase} show={route.show} />;
     case 'live':

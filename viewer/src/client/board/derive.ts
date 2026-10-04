@@ -1,17 +1,20 @@
 /**
  * Kanban and list-view derivation: a {@link Project} in, what the phase
- * kanban's columns and the list view's phase rows draw out
+ * kanban's lanes and phase cards and the list view's phase rows draw out
  * (design-system.md "Phase kanban", "List view"). Pure (no DOM, no React).
  *
- * Tile states are the rail's sprint card states (`rail/derive.ts`), so a
- * sprint reads the same on the board and in its panel. Filter groups come
- * from `phaseGroup`.
+ * The kanban has three lanes, left to right: Not started, In progress,
+ * Complete. A phase is a card ({@link KanbanColumn}) in the lane of its
+ * `phaseGroup`; the list view's filters use the same groups.
  *
- * | Column treatment | When |
- * |------------------|------|
+ * Tile states are the rail's sprint card states (`rail/derive.ts`), so a
+ * sprint reads the same on the board and in its panel.
+ *
+ * | Card treatment | When |
+ * |----------------|------|
  * | Running | A sprint is in a gate state (Implementing, Verifying, Wave testing, Doc syncing, or a retry of one) or a failed one about to be retried (Verify failed, Wave test failed) |
  * | Not started (dashed) | `phaseGroup` is `future` |
- * | Default | Otherwise. Pink (or manual violet) is never a whole column, only a Needs you tile |
+ * | Default | Otherwise. Pink (or manual violet) is never a whole card, only a Needs you tile |
  */
 import type { Phase, Progress, Project } from '../../core/model.js';
 import { defaultPhase, notStartedTasks, phaseLabel, phaseRuns, type NotStarted } from '../data/status.js';
@@ -19,6 +22,7 @@ import { plural } from '../format.js';
 import { phaseWarnings } from '../states/warnings.js';
 import {
   isActiveState,
+  PHASE_GROUP_LABEL,
   phaseGroup,
   sprintCardState,
   SPRINT_STATE_TEXT,
@@ -32,7 +36,7 @@ export function isStretch(phase: Pick<Phase, 'title'>): boolean {
   return /\(stretch\)/i.test(phase.title);
 }
 
-/** One sprint tile in a kanban column. */
+/** One sprint tile on a phase card. */
 export interface KanbanTile {
   id: string;
   title: string;
@@ -43,12 +47,12 @@ export interface KanbanTile {
   running: boolean;
 }
 
-/** One phase: a kanban column, and a row of the list view's phase list. */
+/** One phase: a card in a kanban lane, and a row of the list view's phase list. */
 export interface KanbanColumn {
   number: number;
   /** Title as written ("" when the file has none). */
   title: string;
-  /** "Phase 2: Core Model": the column link's accessible name. */
+  /** "Phase 2: Core Model": the card link's accessible name. */
   label: string;
   group: PhaseGroup;
   /** A sprint is in a gate state. */
@@ -67,7 +71,7 @@ export interface KanbanColumn {
   tiles: KanbanTile[];
 }
 
-/** A column for one phase. */
+/** A card for one phase. */
 export function kanbanColumn(project: Project, phase: Phase): KanbanColumn {
   const progress = project.progress.byPhase[String(phase.number)];
   const done = progress?.done ?? 0;
@@ -93,17 +97,39 @@ export function kanbanColumn(project: Project, phase: Phase): KanbanColumn {
   };
 }
 
-/** Every phase's column, in phase order. */
+/** Every phase's card, in phase order. */
 export function kanbanColumns(project: Project): KanbanColumn[] {
   return project.phases.map((phase) => kanbanColumn(project, phase));
 }
 
-/** Whether a phase in `group` shows under `filter`. */
+/** One lane of the kanban: the phases in one group. */
+export interface KanbanLane {
+  group: PhaseGroup;
+  /** "Not started", "In progress" or "Complete". */
+  label: string;
+  /** Its phases' cards, in phase order. */
+  columns: KanbanColumn[];
+}
+
+/** Lanes left to right, the way a board reads: to do, doing, done. */
+const LANE_ORDER: readonly PhaseGroup[] = ['future', 'progress', 'complete'];
+
+/** The kanban's three lanes. A lane with no phases stays, empty. */
+export function kanbanLanes(project: Project): KanbanLane[] {
+  const columns = kanbanColumns(project);
+  return LANE_ORDER.map((group) => ({
+    group,
+    label: PHASE_GROUP_LABEL[group],
+    columns: columns.filter((c) => c.group === group),
+  }));
+}
+
+/** Whether a phase in `group` shows under `filter` (the list view). */
 export function matchesFilter(group: PhaseGroup, filter: PhaseFilter): boolean {
   return filter === 'all' || filter === group;
 }
 
-/** The one line an empty filter shows in place of the board or phase list. */
+/** The one line an empty filter shows in place of the phase list. */
 export const EMPTY_FILTER_TEXT: Record<PhaseGroup, string> = {
   progress: 'No phases in progress',
   complete: 'No complete phases',

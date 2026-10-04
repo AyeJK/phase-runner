@@ -108,7 +108,7 @@
   text-transform: uppercase;
   color: var(--text-3);
 }
-/* The Kanban | List toggle's look (shell/shell.css), full width in the dropdown. */
+/* The List | Kanban toggle's look (shell/shell.css), full width in the dropdown. */
 .view-toggle.theme-toggle {
   align-self: stretch;
   margin-left: 0;

@@ -89,7 +89,7 @@
 
   /* Radii */
   --r: 6px; /* buttons, sprint cards, sprint tiles, phase list rows, chevron */
-  --r-lg: 10px; /* kanban columns, wave cells, empty state */
+  --r-lg: 10px; /* kanban cards, wave cells, empty state */
   --r-banner: 8px;
   --r-sm: 4px; /* stage chips, badges, tags, mode label, code */
 
@@ -98,7 +98,7 @@
   --filter: 48px; /* filter row */
   --panel: 1000px; /* slide-in panel width (never wider than the viewport) */
   --list: 320px; /* list view phase column */
-  --kan-col-min: 180px; /* narrowest kanban column; the board scrolls sideways below this */
+  --kan-col-min: 240px; /* narrowest kanban lane; the board scrolls sideways below this */
   --wave-col: 180px; /* the rail's wave column */
 
   /* Motion: the slide-in panel and its scrim (none under reduced motion). */

@@ -120,7 +120,8 @@ test.describe('connection lost', () => {
       await expect(page.locator('.app')).toHaveAttribute('data-connection', 'live');
       const columns = page.locator('a[data-kan-col]');
       await expect(columns).toHaveCount(3);
-      await expect(columns.nth(1)).toHaveAccessibleName(ACTIVE_PHASE);
+      const active = page.locator('a[data-kan-col="2"]');
+      await expect(active).toHaveAccessibleName(ACTIVE_PHASE);
 
       // Connected: nothing connection-related on screen.
       const banner = page.getByTestId('connection-lost');
@@ -139,7 +140,7 @@ test.describe('connection lost', () => {
       const shown = await banner.boundingBox();
       expect(row && shown && shown.y >= row.y + row.height).toBe(true);
       // An open panel shows it too.
-      await columns.nth(1).click();
+      await active.click();
       await expect(page.getByTestId('slide-panel').getByTestId('connection-lost')).toBeVisible();
 
       await harness.startServer();

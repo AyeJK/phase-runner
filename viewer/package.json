@@ -1,6 +1,6 @@
 {
   "name": "phase-viewer",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Local live dashboard for phase-runner builds: phases, sprints, tasks and run-log events.",
   "keywords": [
     "phase-runner",

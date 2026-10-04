@@ -1,8 +1,9 @@
 /**
- * The unified shell (Sprint 7.3): the phase kanban at `/`, the filter row,
- * the slide-in panel, the list view at `/list`, the Kanban | List toggle,
- * and the old routes' redirects. Every test starts with the kanban as the
- * last layout used, so a bare `/` opens it.
+ * The unified shell (Sprint 7.3): the phase kanban at `/` (three lanes: Not
+ * started, In progress, Complete), the slide-in panel, the list view at
+ * `/list` and its filter row, the List | Kanban toggle, and the old routes'
+ * redirects. Every test starts with the kanban as the last layout used, so
+ * a bare `/` opens it.
  *
  * - The `multi-phase` fixture (as-is timestamps): phase 1 complete, phase 2
  *   in progress with a blocked task (Needs you), phase 3 not started (no run
@@ -10,10 +11,10 @@
  *   from the same fixture with the same pure functions the client uses.
  * - A `trail-log` copy with phase 2's title made long enough to wrap, one
  *   task of a finished sprint set back to not started (the amber Waiting
- *   tile), and an `implement` `start` marker appended (a running column and
+ *   tile), and an `implement` `start` marker appended (a running card and
  *   an Implementing tile).
  * - A `multi-phase` copy edited while the page is open: counts, tiles, the
- *   filter groups and warning tags follow within 2 s, without a reload.
+ *   lanes and warning tags follow within 2 s, without a reload.
  *
  * Overview's checks (Sprint 7.4) moved here: hand-counted done / eligible
  * per phase with cut and deferred left out, status bar segments sized by
@@ -55,6 +56,14 @@ async function horizontalOverflow(page: Page): Promise<number> {
   });
 }
 
+/** How far the kanban board scrolls sideways inside itself (0 or less means it doesn't). */
+async function boardOverflow(page: Page): Promise<number> {
+  return page.getByTestId('kan-board').evaluate((el) => {
+    const board = el as unknown as { scrollWidth: number; clientWidth: number };
+    return board.scrollWidth - board.clientWidth;
+  });
+}
+
 /** Whether focus is inside the slide-in panel. */
 async function focusInPanel(page: Page): Promise<boolean> {
   return page.evaluate(() => {
@@ -84,6 +93,14 @@ async function attrs(list: Locator, name: string): Promise<(string | null)[]> {
 /** `--manual` as computed, in either theme (dark `#a78bfa`, light `#6d28d9`). */
 const MANUAL_RGB = /^rgb\((167, 139, 250|109, 40, 217)\)$/;
 
+/** Lanes, left to right. */
+const LANES = ['future', 'progress', 'complete'] as const;
+
+function lane(page: Page, group: (typeof LANES)[number]): Locator {
+  return page.locator(`section[data-lane="${group}"]`);
+}
+
+/** A phase's card (the hook is from when each phase was a column). */
 function column(page: Page, n: number): Locator {
   return page.locator(`a[data-kan-col="${n}"]`);
 }
@@ -104,7 +121,7 @@ function toggle(page: Page, name: 'Kanban' | 'List'): Locator {
   return page.getByRole('group', { name: 'Layout' }).getByRole('button', { name });
 }
 
-/** "6/6 tasks": done over eligible, as the column and panel heading write it. */
+/** "6/6 tasks": done over eligible, as the card and panel heading write it. */
 function countText(project: Project, n: number): string {
   const p = project.progress.byPhase[String(n)];
   const eligible = p?.eligible ?? 0;
@@ -157,18 +174,6 @@ async function editLine(file: string, pattern: RegExp, replacement: string): Pro
   await writeFile(file, text.replace(pattern, replacement), 'utf8');
 }
 
-/** The top of each column's status bar. */
-async function barTops(page: Page): Promise<number[]> {
-  const bars = page.locator('a[data-kan-col] [data-testid="phase-status-bar"]');
-  const tops: number[] = [];
-  for (const bar of await bars.all()) {
-    const box = await bar.boundingBox();
-    expect(box).toBeTruthy();
-    tops.push(box!.y);
-  }
-  return tops;
-}
-
 // A first visit to `/` opens the list view (`shell.spec.ts`); these tests are about the kanban.
 test.beforeEach(async ({ page }) => {
   await startOnKanban(page);
@@ -192,7 +197,7 @@ test.describe('multi-phase fixture', () => {
 
   test.use({ viewport: { width: 1280, height: 900 } });
 
-  test('/ shows every phase as a column with its count, status bar and sprint tiles', async ({ page }) => {
+  test('/ shows three lanes, each phase a card in its lane with its count, status bar and sprint tiles', async ({ page }) => {
     await open(page, `${loop.baseURL}/`);
     await expect(page).toHaveURL(`${loop.baseURL}/`);
 
@@ -202,8 +207,19 @@ test.describe('multi-phase fixture', () => {
     await expect(page.locator('.app-head button')).toHaveCount(1);
     await expect(page.locator('.app-head button')).toHaveAccessibleName('Settings');
 
-    const cols = page.locator('a[data-kan-col]');
-    expect(await attrs(cols, 'data-kan-col')).toEqual(project.phases.map((p) => String(p.number)));
+    // Three lanes, left to right, each with its group's phases in phase order and their count.
+    const lanes = page.locator('section[data-lane]');
+    expect(await attrs(lanes, 'data-lane')).toEqual([...LANES]);
+    await expect(lanes.getByRole('heading', { level: 2 })).toHaveText([/^Not started/, /^In progress/, /^Complete/]);
+    for (const group of LANES) {
+      const want = project.phases.filter((p) => phaseGroup(project, p) === group).map((p) => String(p.number));
+      expect(await attrs(lane(page, group).locator('a[data-kan-col]'), 'data-kan-col')).toEqual(want);
+      await expect(lane(page, group).getByTestId('lane-count')).toHaveText(String(want.length));
+    }
+    await expect(page.locator('a[data-kan-col]')).toHaveCount(project.phases.length);
+    // The lanes are the groups: no filters here.
+    await expect(page.locator('button[data-filter]')).toHaveCount(0);
+
     for (const phase of project.phases) {
       const col = column(page, phase.number);
       await expect(col).toHaveAccessibleName(`Phase ${phase.number}: ${phase.title}`);
@@ -221,11 +237,11 @@ test.describe('multi-phase fixture', () => {
     // Complete: the pass icon, with the state word for screen readers.
     await expect(tile(page, '1.1').locator('svg.i.pass')).toHaveCount(1);
     await expect(tile(page, '1.1').locator('.visually-hidden')).toHaveText(', Complete');
-    // Needs you: pink border and the needs icon. Pink is never a whole column.
+    // Needs you: pink border and the needs icon. Pink is never a whole card.
     await expect(tile(page, '2.1')).toHaveClass(/\bneeds\b/);
     await expect(tile(page, '2.1').locator('svg.i.needs')).toHaveCount(1);
     await expect(column(page, 2)).not.toHaveClass(/needs/);
-    // Not started: dashed tile with the grey dot; a not-started phase's column is dashed.
+    // Not started: dashed tile with the grey dot; a not-started phase's card is dashed.
     await expect(tile(page, '3.1')).toHaveClass(/\bfuture\b/);
     await expect(tile(page, '3.1').locator('svg.i.wait')).toHaveCount(1);
     await expect(column(page, 3)).toHaveClass(/\bfuture\b/);
@@ -233,18 +249,18 @@ test.describe('multi-phase fixture', () => {
     // Nothing is running here.
     await expect(page.locator('a[data-kan-col].running')).toHaveCount(0);
 
-    // Columns are equal width and every status bar sits at the same height.
-    const widths = await Promise.all((await cols.all()).map(async (c) => (await c.boundingBox())!.width));
-    for (const w of widths) expect(Math.abs(w - widths[0]!)).toBeLessThan(1);
-    const tops = await barTops(page);
-    expect(tops).toHaveLength(project.phases.length);
-    for (const top of tops) expect(Math.abs(top - tops[0]!)).toBeLessThan(1);
+    // Lanes are equal width, side by side, and fit: nothing to scroll to.
+    const boxes = await Promise.all((await lanes.all()).map(async (l) => (await l.boundingBox())!));
+    for (const box of boxes) expect(Math.abs(box.width - boxes[0]!.width)).toBeLessThan(1);
+    expect(boxes[0]!.x).toBeLessThan(boxes[1]!.x);
+    expect(boxes[1]!.x).toBeLessThan(boxes[2]!.x);
+    expect(await boardOverflow(page)).toBeLessThanOrEqual(0);
 
     await expect(page).toHaveTitle(/^Phases · /);
   });
 
   // Moved from Overview (Sprint 7.4): numbers written out by hand, so a model change and a rendering bug can't cancel out.
-  test('column counts are done over eligible from the model, with cut and deferred left out', async ({ page }) => {
+  test('card counts are done over eligible from the model, with cut and deferred left out', async ({ page }) => {
     await open(page, `${loop.baseURL}/`);
     for (const want of MULTI_PHASE) {
       const model = project.progress.byPhase[String(want.phase)]!;
@@ -274,11 +290,10 @@ test.describe('multi-phase fixture', () => {
     }
   });
 
-  test('each filter shows its count and exactly its columns, without resizing them', async ({ page }) => {
-    await open(page, `${loop.baseURL}/`);
+  test('the list view: each filter shows its count and exactly its rows', async ({ page }) => {
+    await open(page, `${loop.baseURL}/list`);
     const counts = phaseGroupCounts(project);
-    const cols = page.locator('a[data-kan-col]');
-    const width = (await column(page, 2).boundingBox())!.width;
+    const rows = page.locator('a[data-phase-item]');
 
     await expect(filter(page, 'all')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('button[data-filter] .filter-label')).toHaveText(PHASE_FILTERS.map((f) => f.label));
@@ -288,27 +303,25 @@ test.describe('multi-phase fixture', () => {
       await filter(page, f.key).click();
       await expect(filter(page, f.key)).toHaveAttribute('aria-pressed', 'true');
       await expect(page.locator('button[data-filter][aria-pressed="true"]')).toHaveCount(1);
-      await expect(page).toHaveURL(f.key === 'all' ? `${loop.baseURL}/` : `${loop.baseURL}/?show=${f.key}`);
+      await expect(page).toHaveURL(f.key === 'all' ? `${loop.baseURL}/list` : `${loop.baseURL}/list?show=${f.key}`);
 
       const expected = project.phases
         .filter((p) => f.key === 'all' || phaseGroup(project, p) === f.key)
         .map((p) => String(p.number));
-      expect(await attrs(cols, 'data-kan-col')).toEqual(expected);
+      expect(await attrs(rows, 'data-phase-item')).toEqual(expected);
       expect(expected).toHaveLength(counts[f.key]);
-      // The columns left keep their width.
-      for (const c of await cols.all()) expect(Math.abs((await c.boundingBox())!.width - width)).toBeLessThan(1);
     }
 
     // In progress is exactly the started phases that aren't complete.
     await filter(page, 'progress').click();
-    expect(await attrs(cols, 'data-kan-col')).toEqual(['2']);
+    expect(await attrs(rows, 'data-phase-item')).toEqual(['2']);
     // The filter survives a reload.
     await page.reload();
     await expect(filter(page, 'progress')).toHaveAttribute('aria-pressed', 'true');
-    await expect(cols).toHaveCount(1);
+    await expect(rows).toHaveCount(1);
   });
 
-  test('clicking a column slides its rail in; the back arrow, the scrim and Escape close it', async ({ page }) => {
+  test('clicking a card slides its rail in; the back arrow, the scrim and Escape close it', async ({ page }) => {
     await open(page, `${loop.baseURL}/`);
 
     // Open by click: the panel slides in from the right, over a scrim.
@@ -343,7 +356,7 @@ test.describe('multi-phase fixture', () => {
     await page.keyboard.press('Tab');
     await expect(back).toBeFocused();
 
-    // Back arrow: closes, focus returns to the column.
+    // Back arrow: closes, focus returns to the card.
     await back.click();
     await expect(panel(page)).toHaveCount(0);
     await expect(page).toHaveURL(`${loop.baseURL}/`);
@@ -451,22 +464,27 @@ test.describe('multi-phase fixture', () => {
     await expect(rail).toHaveAttribute('data-phase', implied);
   });
 
-  test('the view toggle keeps the filter and the phase', async ({ page }) => {
+  test('the view toggle keeps the phase; the filter stays with the list view', async ({ page }) => {
     await open(page, `${loop.baseURL}/list?phase=2&show=progress`);
     await toggle(page, 'Kanban').click();
-    await expect(page).toHaveURL(`${loop.baseURL}/?phase=2&show=progress`);
+    await expect(page).toHaveURL(`${loop.baseURL}/?phase=2`);
     await expect(page.getByRole('dialog', { name: 'Phase 2: Library UI' })).toBeVisible();
-    await expect(filter(page, 'progress')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator('a[data-kan-col]')).toHaveCount(1);
+    // The kanban shows every phase, whatever the list was filtered to.
+    await expect(page.locator('a[data-kan-col]')).toHaveCount(project.phases.length);
 
     await page.keyboard.press('Escape');
-    await expect(page).toHaveURL(`${loop.baseURL}/?show=progress`);
+    await expect(page).toHaveURL(`${loop.baseURL}/`);
     await expect(toggle(page, 'Kanban')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('button[data-filter]')).toHaveCount(0);
 
     await toggle(page, 'List').click();
-    await expect(page).toHaveURL(`${loop.baseURL}/list?show=progress`);
+    await expect(page).toHaveURL(`${loop.baseURL}/list`);
     await expect(page.getByTestId('list-view')).toBeVisible();
-    await expect(filter(page, 'progress')).toHaveAttribute('aria-pressed', 'true');
+    await expect(filter(page, 'all')).toHaveAttribute('aria-pressed', 'true');
+
+    // A `show` on the kanban's URL is ignored.
+    await open(page, `${loop.baseURL}/?show=complete`);
+    await expect(page.locator('a[data-kan-col]')).toHaveCount(project.phases.length);
   });
 
   test('the last layout is remembered for /, and the Kanban toggle still reaches the kanban', async ({ page }) => {
@@ -514,8 +532,9 @@ test.describe('multi-phase fixture', () => {
       await open(page, `${loop.baseURL}/`);
       await expect(page.locator('a[data-kan-col]')).toHaveCount(project.phases.length);
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
-      // Columns keep their 180px minimum; the board scrolls sideways.
-      expect((await column(page, 1).boundingBox())!.width).toBeGreaterThanOrEqual(179);
+      // Lanes keep their 240px minimum; the board scrolls sideways.
+      for (const group of LANES) expect((await lane(page, group).boundingBox())!.width).toBeGreaterThanOrEqual(239);
+      expect(await boardOverflow(page)).toBeGreaterThan(0);
 
       await column(page, 2).click();
       await expect(panel(page)).toBeVisible();
@@ -545,7 +564,7 @@ test.describe('multi-phase fixture', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('the kanban follows phase file edits', () => {
-  test('counts, tiles, groups and warning tags update within 2 s without a reload', async ({ page }) => {
+  test('counts, tiles, lanes and warning tags update within 2 s without a reload', async ({ page }) => {
     test.setTimeout(90_000);
     const APPEAR_MS = 2_000;
     const harness = await startHarness({ clientPort: 4854, serverPort: 4855, fixture: 'multi-phase', freshness: 'as-is' });
@@ -572,6 +591,7 @@ test.describe('the kanban follows phase file edits', () => {
       // Before that, 3.2's MANUAL task alone leaves the tile Not started and the phase future.
       await expect(tile(page, '3.2')).toHaveAttribute('data-state', 'not-started');
       await expect(column(page, 3)).toHaveAttribute('data-group', 'future');
+      await expect(lane(page, 'future').locator('a[data-kan-col]')).toHaveCount(1);
       await editLine(phase3File, /\| — \| 1 \| Stats queries/, '| x | 1 | Stats queries');
       await expect(tile(page, '3.2')).toHaveAttribute('data-state', 'waiting', { timeout: APPEAR_MS });
       await expect(tile(page, '3.2').locator('svg.i.manual')).toHaveCount(0);
@@ -593,9 +613,13 @@ test.describe('the kanban follows phase file edits', () => {
       await expect(tile(page, '3.2').locator('svg.i.manual')).toHaveCount(0);
       await expect(column(page, 3)).toHaveAttribute('data-group', 'progress');
       await expect(column(page, 3).getByTestId('kan-count')).toHaveText('1/5 tasks');
-      await expect(page.locator('button[data-filter="progress"]').getByTestId('filter-count')).toHaveText('2');
+      // Phase 3 moved lanes when it started: In progress holds 2 and 3, and Not started is empty.
+      expect(await attrs(lane(page, 'progress').locator('a[data-kan-col]'), 'data-kan-col')).toEqual(['2', '3']);
+      await expect(lane(page, 'progress').getByTestId('lane-count')).toHaveText('2');
+      await expect(lane(page, 'future').getByTestId('lane-count')).toHaveText('0');
+      await expect(lane(page, 'future').getByTestId('lane-empty')).toHaveText('No phases');
 
-      // 4. A table row with no closing pipe: phase 1's column gets a warning count.
+      // 4. A table row with no closing pipe: phase 1's card gets a warning count.
       await editLine(
         phase1File,
         /\| x \| 3 \| Seed script with 20 sample books \| scripts\/seed\.ts \|/,
@@ -624,7 +648,7 @@ test.describe('the kanban follows phase file edits', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('a wrapped title, a task left and a running sprint', () => {
-  test('status bars still line up; Waiting and Implementing tiles; the running column', async ({ page }) => {
+  test('a long title wraps to two lines; Waiting and Implementing tiles; the running card', async ({ page }) => {
     const harness = await startHarness({ clientPort: 4852, serverPort: 4853, freshness: 'fresh' });
     try {
       const longTitle = 'Trip Journal, Offline Sync and the Long Road to Shareable Photo Albums';
@@ -642,11 +666,10 @@ test.describe('a wrapped title, a task left and a running sprint', () => {
       await open(page, `${harness.baseURL}/`);
       const title = column(page, 2).getByTestId('kan-title');
       await expect(title).toHaveText(longTitle);
-      // It wraps to two lines; the shorter titles reserve the same two lines.
-      expect((await title.boundingBox())!.height).toBeGreaterThan(30);
-      const tops = await barTops(page);
-      expect(tops).toHaveLength(3);
-      for (const top of tops) expect(Math.abs(top - tops[0]!)).toBeLessThan(1);
+      // It wraps to two lines and stops there.
+      const titleHeight = (await title.boundingBox())!.height;
+      expect(titleHeight).toBeGreaterThan(30);
+      expect(titleHeight).toBeLessThan(50);
 
       // A task left: the amber remaining tile (tint, 2px amber left edge, amber dot), never pink.
       const s21 = tile(page, '2.1');
@@ -655,7 +678,7 @@ test.describe('a wrapped title, a task left and a running sprint', () => {
       await expect(s21).toHaveCSS('box-shadow', /rgb\(255, 176, 0\) 2px 0px 0px 0px inset/);
       await expect(s21.locator('svg.i.wait')).toHaveCSS('color', 'rgb(255, 176, 0)');
 
-      // The implementer starts 2.2: its tile runs with the state badge, and the column runs.
+      // The implementer starts 2.2: its tile runs with the state badge, and the card runs.
       const marker = JSON.stringify({
         v: 1,
         ts: formatTs(new Date()),
@@ -677,10 +700,6 @@ test.describe('a wrapped title, a task left and a running sprint', () => {
       await expect(column(page, 2)).toHaveClass(/\brunning\b/);
       await expect(column(page, 2)).toHaveAttribute('data-running', 'true');
       await expect(column(page, 1)).not.toHaveClass(/\brunning\b/);
-
-      // Status bars still line up with a badge in a tile.
-      const after = await barTops(page);
-      for (const top of after) expect(Math.abs(top - after[0]!)).toBeLessThan(1);
 
       // /live now lands on the running phase.
       await open(page, `${harness.baseURL}/live`);

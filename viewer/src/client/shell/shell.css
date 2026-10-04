@@ -69,7 +69,7 @@
   outline-offset: -2px;
 }
 
-/* Kanban | List: one outline, two segments. */
+/* List | Kanban: one outline, two segments. */
 .view-toggle {
   display: flex;
   flex-shrink: 0;

@@ -252,12 +252,19 @@ export type PhaseGroup = 'progress' | 'complete' | 'future';
 /** One filter of the filter row, in display order. */
 export type PhaseFilter = 'all' | PhaseGroup;
 
-/** Filter labels in display order, typed in sentence case. */
+/** Group labels, typed in sentence case: the filters' and the kanban lanes'. */
+export const PHASE_GROUP_LABEL: Record<PhaseGroup, string> = {
+  progress: 'In progress',
+  complete: 'Complete',
+  future: 'Not started',
+};
+
+/** Filter labels in display order. */
 export const PHASE_FILTERS: ReadonlyArray<{ key: PhaseFilter; label: string }> = [
   { key: 'all', label: 'All' },
-  { key: 'progress', label: 'In progress' },
-  { key: 'complete', label: 'Complete' },
-  { key: 'future', label: 'Not started' },
+  { key: 'progress', label: PHASE_GROUP_LABEL.progress },
+  { key: 'complete', label: PHASE_GROUP_LABEL.complete },
+  { key: 'future', label: PHASE_GROUP_LABEL.future },
 ];
 
 // ---------------------------------------------------------------------------

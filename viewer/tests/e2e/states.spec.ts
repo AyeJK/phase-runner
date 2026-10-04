@@ -10,7 +10,7 @@
  *   command as plain text, and picks neither.
  * - Parse warnings: on a copy of the `broken` fixture, the warnings banner
  *   shows at the top of the phase's rail (list view and slide-in panel) and
- *   as a tag on its kanban column; Show details reveals the file, each line
+ *   as a tag on its kanban card; Show details reveals the file, each line
  *   number and its raw text; every other sprint still renders.
  * - Not found: `/sprint/9.9`, `/phase/99` and an unknown address show the
  *   not-found block with a link back to the phases, inside the shell.
@@ -363,7 +363,7 @@ test.describe('broken fixture', () => {
     // Switched to the kanban, the phase stays open in the panel, which shows the banner too.
     await page.getByRole('group', { name: 'Layout' }).getByRole('button', { name: 'Kanban' }).click();
     await expect(page.getByTestId('slide-panel').getByTestId('parse-warnings')).toHaveCount(1);
-    // Behind it, the kanban column still renders, with its warnings tag.
+    // Behind it, the kanban card still renders, with its warnings tag.
     await page.keyboard.press('Escape');
     const column = page.locator('a[data-kan-col="1"]');
     await expect(column).toBeVisible();

@@ -4,8 +4,9 @@
  * the panel is styled by `../rail/rail.css`; the status bar (`.seg-bar`) by
  * `../styles/app.css`; badges and tags by `../sprint/sprint.css`.
  *
- * The kanban never widens the page: the board scrolls sideways inside
- * itself. Every flex child that holds text gets `min-width: 0`.
+ * The kanban never widens the page: when its three lanes don't fit, the
+ * board scrolls sideways inside itself. Every flex child that holds text
+ * gets `min-width: 0`.
  */
 
 /* ---------- Board ---------- */
@@ -23,37 +24,49 @@
   margin-bottom: 0;
 }
 
-/*
- * One track per phase whatever the filter, so hiding columns never resizes
- * the rest. Each column spans four rows on a subgrid (head, title, status
- * bar, tiles), so status bars line up across columns.
- */
+/* Three equal lanes: Not started, In progress, Complete. */
 .kan-board {
   display: grid;
-  grid-template-columns: repeat(var(--cols), minmax(var(--kan-col-min), 1fr));
-  grid-template-rows: repeat(4, auto);
+  grid-template-columns: repeat(3, minmax(var(--kan-col-min), 1fr));
   column-gap: 12px;
-  row-gap: 0;
   align-items: start;
   padding: 20px 24px 40px;
   overflow-x: auto;
 }
 
-.board-empty {
-  padding: 20px 24px 40px;
+/* ---------- Lane ---------- */
+
+.kan-lane {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-width: 0;
+}
+.kan-lane-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  font: 600 14px/1.4 var(--sans);
+  color: var(--text);
+}
+.kan-lane-count {
+  font: 500 12px var(--mono);
+  color: var(--text-3);
+}
+.kan-lane-empty {
+  margin: 0;
   font-size: 13px;
   color: var(--text-3);
 }
 
-/* ---------- Column ---------- */
+/* ---------- Phase card ---------- */
 
 .kan-col {
   /* Contains the tiles' screen-reader state words. */
   position: relative;
-  display: grid;
-  grid-row: span 4;
-  grid-template-rows: subgrid;
-  align-self: stretch;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   padding: 14px 16px;
   color: var(--text);
@@ -116,10 +129,9 @@
   background: var(--warn-bg);
 }
 
-/* Two lines reserved and clamped, so every status bar lines up. */
+/* Two lines at most. */
 .kan-title {
   display: -webkit-box;
-  min-height: calc(2 * 1.35em);
   margin-top: 6px;
   overflow: hidden;
   font: 600 15px/1.35 var(--sans);
@@ -324,8 +336,7 @@
   .kan-banners {
     padding: 16px 16px 0;
   }
-  .kan-board,
-  .board-empty {
+  .kan-board {
     padding: 16px 16px 32px;
   }
   .rail-head .back {

@@ -1,13 +1,12 @@
 /**
- * One kanban column (design-system.md "Phase kanban"): the whole column is
- * one link that opens the phase's slide-in panel (`/?phase=N`, keeping the
- * filter). Top to bottom: "Phase N" and "done/eligible tasks" (plus the
- * warnings and Stretch tags), the title reserving two lines, the phase's
- * status bar, then one tile per sprint in plan order.
+ * One phase card in a kanban lane (design-system.md "Phase kanban"): the
+ * whole card is one link that opens the phase's slide-in panel
+ * (`/?phase=N`). Top to bottom: "Phase N" and "done/eligible tasks" (plus
+ * the warnings and Stretch tags), the title (two lines at most), the
+ * phase's status bar, then one tile per sprint in plan order.
  *
- * The board lays columns out on a subgrid, so heads, titles and status bars
- * share rows across columns: every status bar sits at the same height even
- * when a title wraps or a head holds tags.
+ * The card keeps the `kan-col` class and hooks from when each phase was a
+ * column of the board.
  *
  * A tile shows its state icon, id and title; a running tile adds its state
  * badge ("Implementing", or red "Verify failed" before a retry). Other tiles carry the state word as visually
@@ -22,7 +21,7 @@ import { useId } from 'react';
 import { StatusIcon, type IconKind } from '../components/StatusIcon.js';
 import { StatusSegments } from '../components/StatusSegments.js';
 import { plural } from '../format.js';
-import { isFailedState, type PhaseFilter, type SprintState } from '../rail/derive.js';
+import { isFailedState, type SprintState } from '../rail/derive.js';
 import { Link, paths } from '../shell/router.js';
 import type { KanbanColumn as Column, KanbanTile } from './derive.js';
 
@@ -71,11 +70,9 @@ interface KanbanColumnProps {
   column: Column;
   /** Its panel is open (or closing). */
   open: boolean;
-  /** The filter in force, kept in the panel's URL. */
-  show: PhaseFilter;
 }
 
-export function KanbanColumn({ column, open, show }: KanbanColumnProps) {
+export function KanbanColumn({ column, open }: KanbanColumnProps) {
   const tilesId = useId();
   const className = [
     'kan-col',
@@ -90,7 +87,7 @@ export function KanbanColumn({ column, open, show }: KanbanColumnProps) {
   return (
     <Link
       className={className}
-      to={paths.board({ phase: column.number, show })}
+      to={paths.board({ phase: column.number })}
       options={{ state: PANEL_ENTRY, scroll: false }}
       aria-label={column.label}
       aria-describedby={column.tiles.length > 0 ? tilesId : undefined}

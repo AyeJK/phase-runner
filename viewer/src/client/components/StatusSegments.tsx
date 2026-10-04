@@ -1,7 +1,7 @@
 /**
  * The status bar (design-system.md "Status bar"): full width, split into one
  * segment per task status, each as wide as its share of the tasks (cut and
- * deferred included). Used by kanban columns, list view rows, the rail's
+ * deferred included). Used by kanban cards, list view rows, the rail's
  * phase bar and each sprint card. Hovering a segment names it; the whole bar is
  * labelled for screen readers. Manual tasks sit right after blocked ones, in
  * violet beside blocked pink, so everything waiting on the user sits together
