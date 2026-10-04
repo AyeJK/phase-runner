@@ -3,7 +3,7 @@
  * Record the viewer while a run log replays, as a GIF (the README's demo).
  *
  *     tsx scripts/record-demo.ts --replay <run-log.jsonl> [--from <project> | --fixture trail-log]
- *                                [--start-at <ts>] [--speed 30] [--max-gap 4000] [--reset-later] [--fill-tasks]
+ *                                [--start-at <ts>] [--speed 30] [--max-gap 4000] [--gap 9@7000] [--reset-later] [--fill-tasks]
  *                                [--path /list?phase=2] [--width 1280] [--height 800] [--light]
  *                                [--fps 12] [--gif-width 1280] [--hold-start 2500] [--hold-end 4000]
  *                                [--out demo.gif] [--frames <folder>]
@@ -21,7 +21,10 @@
  *    and its Run notes open `--notes-delay` after the first step named, and
  *    close `--notes-hold` after the last (where a failed attempt shows, and
  *    then how it was fixed). `--open` does the same with only the card open:
- *    its tasks, and the failure under them while it's retried.
+ *    its tasks, and the failure under them while it's retried. `--gap 9@7000`
+ *    lets step 9 come up to 7000 ms after the step before it, instead of
+ *    `--max-gap`: for an implementation shown in an open card, so each task
+ *    is seen Running before it reads Built.
  * 5. Turns the frames into a GIF with ffmpeg (on PATH), with one palette
  *    built from a sample of frames across the whole clip (and its last).
  *    The GIF is cropped a little below the lowest content any frame showed
@@ -161,6 +164,7 @@ async function main(): Promise<void> {
       'start-at': { type: 'string' },
       speed: { type: 'string' },
       'max-gap': { type: 'string' },
+      gap: { type: 'string' },
       path: { type: 'string' },
       width: { type: 'string' },
       height: { type: 'string' },
@@ -224,6 +228,13 @@ async function main(): Promise<void> {
   });
   if (values['fill-tasks']) steps = await fillTasks(fixture.root, steps);
   const logged = steps.filter((s) => !s.filler).length;
+  if (values.gap !== undefined) {
+    // `--gap 9@7000`: logged step 9 (1-based, as the steps print) may wait up to 7000 ms.
+    const m = /^(\d+)@(\d+)$/.exec(values.gap.trim());
+    const step = m ? steps.filter((s) => !s.filler)[Number(m[1]) - 1] : undefined;
+    if (!m || !step) throw new Error(`--gap must look like 9@7000 (step @ longest wait in ms), with a step from 1 to ${logged}`);
+    step.maxGapMs = Number(m[2]);
+  }
 
   // 2. Server and page.
   const server = await startViewerServer({ port: 4800, host: HOST, workspace: { kind: 'found', root: fixture.root, source: 'dir' } });

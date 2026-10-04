@@ -117,6 +117,12 @@ export interface ScriptStep {
   /** Replayed steps only: the logged `ts`, in ms. */
   at?: number;
   /**
+   * Paced replays only: the longest wait before this step, in place of the
+   * run's `maxGap`. For a step worth lingering on, like the end of an
+   * implementation whose tasks should be seen one by one.
+   */
+  maxGapMs?: number;
+  /**
    * A step added between logged steps (see {@link fillTasks} and
    * {@link addTaskLines}). With `speed` it's placed by `at` inside the wait
    * between the logged steps around it, so it never lengthens the run.
@@ -608,11 +614,12 @@ export function simulateRun(options: SimulateOptions): Simulation {
 /**
  * Wall time of each step after the first, with `speed`: a logged step comes
  * the logged gap divided by `speed` after the previous logged step, at most
- * `maxGap`. Filler steps sit inside that wait in proportion to their `at`.
+ * `maxGap` (or the step's own `maxGapMs`). Filler steps sit inside that wait
+ * in proportion to their `at`.
  */
 export function paceSteps(steps: readonly ScriptStep[], speed: number, maxGap: number): number[] {
   const wall = new Array<number>(steps.length).fill(0);
-  const gap = (a: number, b: number): number => Math.min(maxGap, Math.max(0, (steps[b]!.at! - steps[a]!.at!) / speed));
+  const gap = (a: number, b: number): number => Math.min(steps[b]!.maxGapMs ?? maxGap, Math.max(0, (steps[b]!.at! - steps[a]!.at!) / speed));
   let prev = -1;
   for (let i = 0; i < steps.length; i++) {
     if (steps[i]!.filler) continue;

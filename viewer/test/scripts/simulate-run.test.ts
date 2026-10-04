@@ -203,6 +203,9 @@ describe('simulateRun', () => {
     expect(steps.map((s) => (s.filler ? `~${s.tasks![0]!.task}` : s.events[0]!.result))).toEqual(['start', '~1', '~3', 'blocked', 'partial', 'pass']);
     // At 60×: 8 min of implementing is capped at 4 s, the fillers split it; verify and doc sync 1 s each.
     expect(paceSteps(steps, 60, 4_000).map((w) => Math.round(w))).toEqual([0, 1_333, 2_667, 4_000, 5_000, 6_000]);
+    // A step's own maxGapMs replaces the cap on the wait before it, and its fillers spread over the longer wait.
+    const lingering = steps.map((s, i) => (i === 3 ? { ...s, maxGapMs: 6_000 } : s));
+    expect(paceSteps(lingering, 60, 4_000).map((w) => Math.round(w))).toEqual([0, 2_000, 4_000, 6_000, 7_000, 8_000]);
 
     const phaseFile = path.join(fx.phasesDir, 'Phase-2-Trip-Journal.md');
     const sim = simulateRun({ root: fx.root, steps: steps.slice(0, 3), speed: 1_000_000, origin, startDelayMs: 0 });
