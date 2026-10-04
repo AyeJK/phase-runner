@@ -1,7 +1,7 @@
 {
   "name": "phase-runner-hud",
   "version": "0.1.0",
-  "description": "Optional Claude Code mod for Phase Runner: the running phase in the status line, a toast when a run needs you, and /phase-status with no model call.",
+  "description": "Experimental Claude Code mod for Phase Runner: the running phase in the status line, a toast when a run needs you, and /phase-status with no model call.",
   "author": {
     "name": "Jeremy Kaye",
     "url": "https://github.com/AyeJK"

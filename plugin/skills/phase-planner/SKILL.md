@@ -78,13 +78,20 @@ Turn a plan (a chat, a spec, a product-planner doc) into a new phase file. This 
 **Input:** What the phase delivers, plus whatever plan material the user has.
 
 **Steps:**
-1. Look for `docs/phases/` at the workspace root. If it doesn't exist, create it. No setup script is needed first
-2. Pick the phase number: one higher than the highest existing `Phase-{N}-*.md`, or `1` if there are none
-3. Write `docs/phases/Phase-{N}-{Name}.md` from the full template in [reference.md](reference.md): phase goal, then sprints, each with Goal, Tasks, Acceptance Criteria, Dependencies and **Verification**
-4. Every task starts at Status `—`, except a task only the user can do, which starts at `MANUAL` (not `—` with "(manual)" in the text). Use the sparse-row rules for Module and Reference
-5. Show the user the sprint list and ask them to confirm before `run phase {N}`
+1. If the design is published, bring the files up to date first (Design sync, below)
+2. Look for `docs/phases/` at the workspace root. If it doesn't exist, create it. No setup script is needed first
+3. Pick the phase number: one higher than the highest existing `Phase-{N}-*.md`, or `1` if there are none
+4. Write `docs/phases/Phase-{N}-{Name}.md` from the full template in [reference.md](reference.md): phase goal, then sprints, each with Goal, Tasks, Acceptance Criteria, Dependencies and **Verification**
+5. Every task starts at Status `—`, except a task only the user can do, which starts at `MANUAL` (not `—` with "(manual)" in the text). Use the sparse-row rules for Module and Reference
+6. Show the user the sprint list and ask them to confirm before `run phase {N}`
 
 Never overwrite an existing phase file. If `Phase-{N}` already exists, use the next number or ask.
+
+**Design sync.** A design published by design-planner can be changed on its page (the Design canvas, the Design System page) as well as in the files. `docs/design/DESIGN.md` records the pages in the lines under its title, as `Design system artifact: {url}` and `Design canvas: {url}`. If either line is there and the session has an Artifact tool, run the design-planner skill's Design sync (`design-sync.md`, beside its SKILL.md) before reading `docs/design/`. It copies what changed on the page into the files, and what changed in the files onto the page, without asking.
+
+- Run it once per planning request, not once per phase file.
+- With no `docs/design/DESIGN.md`, neither line in it, or no Artifact tool, skip it and plan from the files as they are.
+- The phase plan is always written from `docs/design/`, never from a published page.
 
 ---
 

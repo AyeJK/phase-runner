@@ -1,6 +1,6 @@
 # phase-runner-hud
 
-An optional Claude Code mod for [Phase Runner](https://github.com/AyeJK/phase-runner). While `phase-builder` runs a phase, it shows where the run is in the status line and raises a toast when the run needs you. `/phase-status` prints the same information on request, without a model call.
+An experimental Claude Code mod for [Phase Runner](https://github.com/AyeJK/phase-runner). While `phase-builder` runs a phase, it shows where the run is in the status line and raises a toast when the run needs you. `/phase-status` prints the same information on request, without a model call.
 
 Phase Runner works the same without it. Nothing in the main plugin depends on the mod, and the mod never writes to your project: it only reads `docs/phases/` and the run logs in `docs/phases/.runs/`.
 

@@ -7,7 +7,7 @@ description: "Orchestrates automated sprint implementation from phase plans — 
 
 Orchestrates sprint implementation from phase plan files at `docs/phases/Phase-{N}-*.md`. Reads the plan, identifies incomplete sprints, **groups sprints into parallel waves when safe**, spawns one sub-agent per sprint (multiple sub-agent calls in the same turn when running a wave), processes results, and manages human checkpoints at blockers and phase boundaries. **Default remains sequential** when the dependency graph, overlap risk, or sprint semantics do not justify parallelism.
 
-**Companion files:** `runtime-adapter.md` (which sub-agent tool and skill-loading mechanism this environment uses), `project-layout.md` (workspace_root vs app_root), `skill-router.md`, `run-log.md` (the per-phase log the gate agents and implementers append to), and the `phase-ui-implement`, `phase-verify`, `phase-wave-test`, `phase-doc-sync` skills.
+**Companion files:** `runtime-adapter.md` (which sub-agent tool and skill-loading mechanism this environment uses), `project-layout.md` (workspace_root vs app_root), `skill-router.md`, `run-log.md` (the per-phase log the gate agents and implementers append to), and the `phase-ui-implement`, `phase-verify`, `phase-wave-test`, `phase-doc-sync` skills. For a published design, also design-planner's `design-sync.md` (Step 1.2).
 
 ---
 
@@ -122,6 +122,57 @@ If the user wants to connect it: check your environment's MCP/connector settings
 
 ---
 
+## Step 1.2 — Design check (published designs only)
+
+A design published by design-planner can be changed on its page (the Design canvas, the Design System page) after the phase was planned. Before the first wave, check for differences between the published pages and `docs/design/`, so the build never runs on files that are behind.
+
+**When.** Both must hold, otherwise skip this step and say nothing:
+
+- `{workspace_root}/docs/design/DESIGN.md` exists and has a `Design system artifact:` or `Design canvas:` line under its title. Grep for those two labels, by absolute path.
+- This session has an Artifact tool.
+
+**How.** Spawn one sub-agent, before Step 1.5 reads `design-system.md`'s headings:
+
+- **description:** `Design check — phase {N}`
+- **prompt:** load the `design-planner` skill per runtime-adapter.md, read its companion `design-sync.md`, and run Design sync for `{workspace_root}` (absolute path). Nothing else from that skill: no design pass, no changes of its own. Return `DESIGN SYNC RESULT`.
+- **model:** the run's default, not `gate_model`. A screen changed on the canvas has its spec rewritten.
+
+This step writes nothing to the run log.
+
+**Then**, from the result:
+
+| `status` | Do |
+|----------|-----|
+| `unchanged` | Go on. Say nothing |
+| `skipped` | Go on. One line only if a page couldn't be read |
+| `needs-user` | Relay the question (the same screen or token changed on both sides, or a screen was removed from the canvas), wait for the answer, and spawn the check again with it |
+| `synced` | Log what was copied, one line each. Then check the plan, below |
+
+**Check the plan.** The files are now current, but the phase file was written from the old ones. Once Step 2 has parsed the sprints in this run, look for:
+
+- a task whose Reference names a spec in `screens_changed` or `screens_removed`
+- a screen in `screens_added` that no sprint covers
+
+None: go on to the execution plan. Token changes alone never stop a run: sprints point at the specs and `design-system.md`, they don't copy values.
+
+Any: stop before the first wave.
+
+```
+⚠ The design changed after this phase was planned.
+
+  Settings — Profile   changed on the canvas   → Sprint {X.Y} builds it
+  Billing              added on the canvas     → no sprint covers it
+
+docs/design/ is up to date. The phase plan is not.
+
+Options:
+  1. Update the plan first — phase-planner revises the sprints above, then run again
+  2. Build as planned — implementers follow the updated specs; acceptance criteria stay as written
+  3. Stop here
+```
+
+---
+
 ## Step 1.5 — Skill routing (best skill per step)
 
 Read **`skill-router.md`** at Step 1.5 (it in turn depends on `runtime-adapter.md` and `project-layout.md` already being resolved).
@@ -141,9 +192,9 @@ Sub-agents load their own assigned skill files/names themselves — orchestrator
 During an active phase run the orchestrator may only:
 
 - Read phase files, skill-router, phase-doc-sync payload shape
-- Check that a file exists and grep `design-system.md`'s headings, by absolute path
-- Spawn sub-agents (implementation, verify, doc-sync, wave-test)
-- Parse `SPRINT RESULT`, `VERIFY RESULT`, `DOC SYNC RESULT`, `WAVE TEST RESULT`
+- Check that a file exists, grep `design-system.md`'s headings and grep `DESIGN.md` for its artifact lines, by absolute path
+- Spawn sub-agents (design check, implementation, verify, doc-sync, wave-test)
+- Parse `DESIGN SYNC RESULT`, `SPRINT RESULT`, `VERIFY RESULT`, `DOC SYNC RESULT`, `WAVE TEST RESULT`
 - One-line logs to the user
 
 The orchestrator must **not**: run shell commands directly, call browser/automation tools directly, start dev servers, read tool JSON descriptors, read source files, or run grep/typecheck for verification. All of that lives in sub-agents.
@@ -854,6 +905,7 @@ User: "Implement phase 5 with responsive-testing"
   workspace_root: …/my-project           — docs/phases, doc-sync
   app_root:       …/my-project/app       — build/test, src/
 
+[Step 1.2: design is published → Sub-agent: Design check → DESIGN SYNC RESULT: unchanged]
 [Step 1.5: skill-router …]
 
 [Turn 1 — Wave 1: 5.1 only]

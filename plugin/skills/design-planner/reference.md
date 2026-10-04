@@ -174,6 +174,8 @@ Two warnings are expected and don't need fixing: `missing-primary` when the main
 
 ## HTML mockup template
 
+This is the plain form, for a project with no Design canvas. When the session can publish a canvas, or the project already has one, a mockup is written in the canvas's own form instead ([artifacts.md](artifacts.md), Screen file form), so the file on disk is the artboard.
+
 `docs/design/screens/{kebab-name}.html`:
 
 ```html
@@ -200,7 +202,7 @@ Two warnings are expected and don't need fixing: `missing-primary` when the main
 </html>
 ```
 
-`_theme.css` should define CSS custom properties matching the DESIGN.md YAML `colors`/`typography`/`spacing`/`rounded` tokens exactly, plus base styles for whatever components appear across mockups (buttons, cards, inputs, nav). Every screen mockup imports this one file — no per-screen token redefinition.
+`_theme.css` should define CSS custom properties matching the DESIGN.md YAML `colors`/`typography`/`spacing`/`rounded` tokens exactly, plus base styles for whatever components appear across mockups (buttons, cards, inputs, nav). Every plain mockup imports this one file — no per-screen token redefinition. A mockup in the canvas's form carries a copy of its rules instead, kept the same as this file.
 
 `index.html` is a simple list of links to every screen mockup, grouped by phase, styled with the same `_theme.css`.
 
