@@ -46,8 +46,6 @@ Step 4 runs on its own. `phase-builder` groups sprints into parallel-safe waves 
 
 <sub>A simulated run, replayed from a run log: Phase 2 of this repo's own build, with the failures, the blocker and the per-task progress.</sub>
 
-**Live task progress.** Open a sprint while it's being implemented and its tasks table follows the implementer: a task reads Running when the implementer starts it and Built when it finishes it. Built means the code for that task is written and no gate has checked it yet. Once the sprint has passed its gates and doc sync has run, each row shows its status from the phase file, such as Complete. The sprint card's status bar fills along with them, in blue, and turns green at doc sync. Task counts, the phase's status bar and the sprint's state still come from the phase file and the gate results. A run log from a plugin version that didn't log each task shows the phase file's statuses, as before.
-
 In Claude Code, say *"open the viewer"*. The `phase-viewer` skill starts it in the background and gives you the URL. Ask again later and you get the same URL, since only one viewer runs per project.
 
 Or, from your project folder (the one that holds `docs/phases/`), in your own terminal:
@@ -55,8 +53,6 @@ Or, from your project folder (the one that holds `docs/phases/`), in your own te
 ```
 npx phase-viewer
 ```
-
-Open the URL it prints. Ctrl+C stops it. Needs Node.js 20 or later.
 
 **Local sessions only.** The viewer serves on `localhost` of the machine that runs it. In a cloud or remote Claude Code session, the skill starts nothing and tells you to run `npx phase-viewer` on your own machine, against your local checkout.
 
@@ -77,10 +73,6 @@ In a Claude app session, the two planning skills publish what they write as Clau
 | `product-planner` | `docs/Plan-{Name}-{date}.html` | The plan as a hosted page |
 | `design-planner` | `docs/design/DESIGN.md` and `design-system.md` | A Design System artifact: the tokens, with `design-system.md` as its README |
 | `design-planner` | `docs/design/screens/*.html` | One Design canvas, with an artboard per mockup, using the project's Design System artifact for its tokens |
-
-You can change the design in two places: on its page, or by asking in chat. Each screen on the canvas is the same HTML file as its mockup in `docs/design/screens/`, and the design system page's README is `design-system.md`, so there is one design, not two. A change on either side is copied to the other without asking: before the next design change, before `phase-planner` creates a phase, and before `phase-builder` starts a build. If a screen changed after its phase was planned, the build tells you before the first wave.
-
-`phase-planner`, the implementers and the gates still read `docs/`, never an artifact. Each file records its artifact's URL (the plan in a `<meta>` tag, the design system and the canvas in `DESIGN.md`'s header), so a later run revises the same artifact and never creates a second one.
 
 ### Claude Code HUD (experimental)
 
