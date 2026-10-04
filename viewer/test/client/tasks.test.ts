@@ -2,9 +2,11 @@
  * Live task progress in the tasks table (`src/client/sprint/status.ts`,
  * design-system.md "Tasks table"): a row whose phase-file status is `—`
  * reads Running after its `task` `start` line and Built after its `pass`
- * line, until the sprint's doc sync is logged. Nothing else reads the `task`
- * lines: task counts, status bars, card states, the kanban tile, the phase
- * badge, wave retries and durations stay as they are without them.
+ * line, until the sprint's doc sync is logged. The sprint card's status bar
+ * counts the same rows (`liveTaskCounts`). Nothing else reads the `task`
+ * lines: task counts, the progress behind every bar, card states, the kanban
+ * tile, the phase badge, wave retries and durations stay as they are without
+ * them.
  */
 import { describe, expect, it } from 'vitest';
 import { deriveProgress } from '../../src/core/derive/progress.js';
@@ -16,7 +18,7 @@ import { readRunLog } from '../../src/core/runlog/read.js';
 import { kanbanColumn } from '../../src/client/board/derive.js';
 import { currentSprintRun, phaseRuns } from '../../src/client/data/status.js';
 import { railView, type RailSprint, type RailView } from '../../src/client/rail/derive.js';
-import { liveTaskStates, phaseBadge, taskRow } from '../../src/client/sprint/status.js';
+import { liveTaskCounts, liveTaskStates, phaseBadge, taskRow } from '../../src/client/sprint/status.js';
 
 // ---------------------------------------------------------------------------
 // An in-memory project
@@ -314,6 +316,45 @@ describe('the overlay source', () => {
     expect(liveTaskStates(null).size).toBe(0);
     const project = makeProject(9, [['9.1', '--']], [[0, 1, '9.1', 'implement', 'start', 1]]);
     expect(liveTaskStates(currentSprintRun(phaseRuns(project, 9), '9.1')).size).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The sprint card's status bar
+// ---------------------------------------------------------------------------
+
+describe('the card status bar counts the overlaid rows', () => {
+  /** What the card's bar is given for a sprint: its running and built tasks. */
+  function counts(project: Project, id: string): { running: number; built: number } {
+    const sprint = sprintOf(project, id);
+    return liveTaskCounts(sprint.tasks, liveTaskStates(currentSprintRun(phaseRuns(project, sprint.phase), id)));
+  }
+  const implementing: LineSpec[] = [[0, 1, '9.1', 'implement', 'start', 1]];
+
+  it('fills a task at a time while the sprint is implemented, and empties at doc sync', () => {
+    const todo: Array<[string, string]> = [['9.1', '---']];
+    expect(counts(makeProject(9, todo, implementing), '9.1')).toEqual({ running: 0, built: 0 });
+
+    const one = [...implementing, task(1, 1, '9.1', 'start', 1)];
+    expect(counts(makeProject(9, todo, one), '9.1')).toEqual({ running: 1, built: 0 });
+
+    const two = [...one, task(3, 1, '9.1', 'pass', 1), task(3, 1, '9.1', 'start', 2)];
+    expect(counts(makeProject(9, todo, two), '9.1')).toEqual({ running: 1, built: 1 });
+
+    const built: LineSpec[] = [...two, task(5, 1, '9.1', 'pass', 2), task(5, 1, '9.1', 'start', 3), task(8, 1, '9.1', 'pass', 3), [9, 1, '9.1', 'implement', 'pass', 1, 'done 1,2,3']];
+    expect(counts(makeProject(9, todo, built), '9.1')).toEqual({ running: 0, built: 3 });
+
+    // Doc sync is logged: the bar is the phase file's again.
+    const synced: LineSpec[] = [...built, [10, 1, '9.1', 'verify', 'pass', 1], [11, 1, '9.1', 'doc_sync', 'pass', 1]];
+    expect(counts(makeProject(9, [['9.1', 'xxx']], synced), '9.1')).toEqual({ running: 0, built: 0 });
+  });
+
+  it('counts only rows the phase file has as not started', () => {
+    const lines: LineSpec[] = [...implementing];
+    for (let n = 1; n <= 6; n++) lines.push(task(n, 1, '9.1', n % 2 === 0 ? 'start' : 'pass', n));
+    // Tasks 1 to 5 are done, manual, blocked, active and cut in the phase file; only task 6 is overlaid.
+    expect(counts(makeProject(9, [['9.1', 'xMB~C-']], lines), '9.1')).toEqual({ running: 1, built: 0 });
+    expect(liveTaskCounts(sprintOf(makeProject(9, [['9.1', '--']], implementing), '9.1').tasks)).toEqual({ running: 0, built: 0 });
   });
 });
 

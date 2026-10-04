@@ -318,7 +318,9 @@ test.describe('a run in progress', () => {
       const words = card(page, '2.2').getByTestId('tasks-table').locator('td.st');
       await expect(words).toHaveText(['Not started', 'Not started', 'Not started']);
       await expect(card(page, '2.2').locator('tr.remaining')).toHaveCount(0);
-      const barBefore = await card(page, '2.2').getByTestId('card-status-bar').getAttribute('aria-label');
+      const bar = card(page, '2.2').getByTestId('card-status-bar');
+      await expect(bar).toHaveAttribute('aria-label', '3 not started');
+      const phaseBarBefore = await page.getByTestId('phase-status-bar').first().getAttribute('aria-label');
       const phaseBefore = await page.getByTestId('phase-progress-text').textContent();
 
       await taskLines(['start', 1]);
@@ -329,6 +331,9 @@ test.describe('a run in progress', () => {
       // A task under way means the sprint has begun: the rows still to do stand out.
       await expect(taskRow('2.2', 2)).toHaveClass(/remaining/);
       await expect(taskRow('2.2', 1)).not.toHaveClass(/remaining/);
+      // The card's status bar fills with it, in the run's colour.
+      await expect(bar).toHaveAttribute('aria-label', '1 running, 2 not started');
+      await expect(bar).toHaveClass(/started/);
 
       await taskLines(['pass', 1], ['start', 2]);
       await expect(taskRow('2.2', 1).locator('td.st')).toHaveText('Built', { timeout: APPEAR_MS });
@@ -338,15 +343,19 @@ test.describe('a run in progress', () => {
       await expect(taskRow('2.2', 1).locator('svg.i.pass')).toHaveCount(0);
       await expect(taskRow('2.2', 1).locator('td.st')).toHaveCSS('color', await badge(page, '2.2').evaluate((el) => (globalThis as unknown as { getComputedStyle(el: unknown): { color: string } }).getComputedStyle(el).color));
       await expect(words).toHaveText(['Built', 'Running', 'Not started']);
+      await expect(bar).toHaveAttribute('aria-label', '1 built, 1 running, 1 not started');
+      await expect(bar.locator('i[data-status="built"]')).toHaveCSS('background-color', await bar.locator('i[data-status="active"]').evaluate((el) => (globalThis as unknown as { getComputedStyle(el: unknown): { backgroundColor: string } }).getComputedStyle(el).backgroundColor));
 
       await taskLines(['pass', 2], ['start', 3]);
       await expect(words).toHaveText(['Built', 'Built', 'Running'], { timeout: APPEAR_MS });
       await taskLines(['pass', 3]);
       await expect(words).toHaveText(['Built', 'Built', 'Built'], { timeout: APPEAR_MS });
 
-      // Nothing else moved: the count, the bars, the badge and the wave are the phase file's and the gates'.
+      await expect(bar).toHaveAttribute('aria-label', '3 built');
+
+      // Nothing else moved: the count, the phase's bar, the badge and the wave are the phase file's and the gates'.
       await expect(card(page, '2.2').locator('.card-sub')).toHaveText('Tasks0/3');
-      await expect(card(page, '2.2').getByTestId('card-status-bar')).toHaveAttribute('aria-label', barBefore!);
+      await expect(page.getByTestId('phase-status-bar').first()).toHaveAttribute('aria-label', phaseBarBefore!);
       await expect(page.getByTestId('phase-progress-text')).toHaveText(phaseBefore!);
       await expect(badge(page, '2.2')).toHaveText('Implementing');
       await expect(w2).toHaveAttribute('data-row-state', 'running');

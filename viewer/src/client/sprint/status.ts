@@ -15,9 +15,10 @@
  * being implemented, its `task` lines in the run log say which task is
  * running and which are built. {@link liveTaskStates} picks the ones that
  * still apply and {@link taskRow} overlays them on rows whose phase-file
- * status is `—`. Only the tasks table reads them: task counts, status bars,
- * card states and the phase badge come from the phase file and the gate
- * lines.
+ * status is `—`. The sprint card's status bar counts the same rows
+ * ({@link liveTaskCounts}), so it fills as the sprint is built. Nothing else
+ * reads them: task counts, phase status bars, card states and the phase badge
+ * come from the phase file and the gate lines.
  */
 import type { Phase, Progress, Project, SprintRun, Task, TaskStatus } from '../../core/model.js';
 import type { IconKind } from '../components/iconKind.js';
@@ -162,6 +163,29 @@ export function taskRow(
   if (state === 'running') return { icon: 'run', words: 'Running', live: state };
   if (state === 'built') return { icon: 'built', words: 'Built', live: state };
   return { icon: taskIcon(task.status), words: taskStatusWords(task), live: null };
+}
+
+/** How many of a sprint's tasks live task progress shows as Running and as Built. */
+export interface LiveTaskCounts {
+  running: number;
+  built: number;
+}
+
+/**
+ * The rows {@link taskRow} overlays, counted, for the sprint card's status
+ * bar: the tasks whose phase-file status is `—` and that `live` says are
+ * running or built.
+ */
+export function liveTaskCounts(
+  tasks: readonly Pick<Task, 'status' | 'rawStatus' | 'number'>[],
+  live: ReadonlyMap<number, LiveTaskState> = NO_LIVE_TASKS,
+): LiveTaskCounts {
+  const counts: LiveTaskCounts = { running: 0, built: 0 };
+  for (const task of tasks) {
+    const state = taskRow(task, live).live;
+    if (state !== null) counts[state]++;
+  }
+  return counts;
 }
 
 /** "5/5": done over eligible, for a sprint's task count. */

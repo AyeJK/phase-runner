@@ -139,7 +139,9 @@
 .seg-bar i[data-status='done'] {
   background: var(--passed);
 }
-.seg-bar i[data-status='active'] {
+/* Built during a run and not yet synced: still the run's colour, as in the tasks table. */
+.seg-bar i[data-status='active'],
+.seg-bar i[data-status='built'] {
   background: var(--running);
 }
 .seg-bar i[data-status='blocked'] {

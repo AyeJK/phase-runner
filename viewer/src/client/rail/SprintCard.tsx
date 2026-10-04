@@ -5,8 +5,10 @@
  *
  * - Collapsed: a toggle row ("Sprint 2.1", the title, the state badge and a
  *   chevron), then the sprint's status bar (left out once it's Complete; the
- *   badge says it all). A card that turns Complete while on screen keeps its
- *   all-green bar for {@link COMPLETE_BAR_MS} first.
+ *   badge says it all). While the sprint is implemented the bar fills in the
+ *   running colour, a task at a time, from the implementer's `task` lines. A
+ *   card that turns Complete while on screen keeps its all-green bar for
+ *   {@link COMPLETE_BAR_MS} first.
  * - Open: the goal, the tasks table (shared `TasksTable`, not-started rows in
  *   amber once the sprint has begun, and rows following the implementer's
  *   `task` lines as Running then Built until doc sync), the failure being retried (while there
@@ -32,7 +34,7 @@ import { StatusSegments } from '../components/StatusSegments.js';
 import { paths } from '../shell/router.js';
 import { Inline } from '../sprint/markdown.js';
 import { CriteriaList, TasksTable } from '../sprint/parts.js';
-import { doneOfEligible, liveTaskStates } from '../sprint/status.js';
+import { doneOfEligible, liveTaskCounts, liveTaskStates } from '../sprint/status.js';
 import { isFailedState, isGateState, type CurrentFailure, type RailSprint, type RunNote, type SprintState } from './derive.js';
 
 /** Badge class (`.status.{kind}`) per state; `not-started` is a plain tag instead. */
@@ -96,7 +98,13 @@ export function SprintCard({ sprint, open, onToggle, dashed, headingLevel }: Spr
           </span>
         </button>
       </Heading>
-      {(sprint.state !== 'complete' || justCompleted) && <StatusSegments progress={sprint.progress} testId="card-status-bar" />}
+      {(sprint.state !== 'complete' || justCompleted) && (
+        <StatusSegments
+          progress={sprint.progress}
+          live={liveTaskCounts(sprint.sprint.tasks, liveTaskStates(sprint.run))}
+          testId="card-status-bar"
+        />
+      )}
 
       <div className="card-body" id={bodyId} hidden={!open} data-testid="card-body">
         {open && <CardBody sprint={sprint} />}
