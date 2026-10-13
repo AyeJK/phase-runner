@@ -21,6 +21,14 @@ Two commands in Claude Code:
 
 Skills load as `phase-runner:phase-planner`, `phase-runner:phase-builder`, and so on.
 
+Using Cursor or another agent, or want plain skills instead of a plugin? Install with [skills](https://skills.sh):
+
+```
+npx skills add AyeJK/phase-runner
+```
+
+This copies the same nine skills into your project, without the `phase-runner:` prefix. The HUD is plugin-only.
+
 Experimental: [Phase Runner HUD Claude mod](#claude-code-hud-experimental) (separate install).
 
 ## How it works
