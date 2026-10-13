@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "phase-runner",
-  "description": "Run software projects as phases → sprints → verified waves. An orchestrator spawns implementation sub-agents; nothing counts as done until separate verify and UI wave-test gates pass.",
+  "description": "Your whole product team, not just a coding agent. Plan → design → build → QA, with you as the PM who signs off.",
   "author": {
     "name": "Jeremy Kaye",
     "url": "https://github.com/AyeJK"
