@@ -34,7 +34,7 @@ Experimental: [Phase Runner HUD Claude mod](#claude-code-hud-experimental) (sepa
 ## How it works
 
 <p align="center">
-  <img src="docs/planning-artifacts.gif" alt="The four steps as Phase Runner ran them to build phase-viewer, two views each. Step 1, product-planner: the plan document scrolls from its overview of what is being built down to its data flow diagram. Step 2, design-planner: the design system, with its colour palette, type, components and status bars, then an artboard of the viewer's screens in dark, light and mobile. Step 3, phase-planner: a phase file with a sprint's goal, tasks and acceptance criteria, then the list of seven phases, all not started. Step 4, phase-builder: a phase mid-run, with two UI sprints building in parallel in wave 1, each by a fresh sub-agent working from the design system, then the finished phase: both waves complete after two retries, with wave 2's sprint passing verify and the browser wave test on its third attempt." width="100%">
+  <img src="docs/how-it-works.gif" alt="How Phase Runner works, one stage at a time, using phase-viewer's own build. Idea: product-planner writes the plan and weighs three options for who writes the run log, picking A3. Design: design-planner locks the palette, type and status badges. Plan: phase-planner lists seven phases and splits Phase 2 into sprints 2.1 to 2.5, with acceptance criteria. Build: phase-builder runs the sprints in four waves, with 2.2 and 2.3 in parallel, each on a fresh sub-agent. QA: verify fails Sprint 2.3 on two tests, retries with the failure attached, and passes. Sign off: Phase 2 ends at 27 of 28 tasks with one needing you, and you approve." width="100%">
 </p>
 
 1. **Plan the product.** Starting something new? Tell `product-planner` what you want to build. It turns the idea into a product plan: the options, how the data flows, and the open questions to settle. In a Claude app session the plan publishes as an artifact you can share.
@@ -49,10 +49,10 @@ Step 4 runs on its own. `phase-builder` groups sprints into parallel-safe waves 
 [`phase-viewer`](viewer/) is a local dashboard for tracking your phases, sprints and tasks. Monitor your phase builds, wave progress, verification failures and anything that needs your attention. It updates as the files change, and it only reads your project, never writes to it.
 
 <p align="center">
-  <img src="docs/phase-viewer-demo.gif" alt="phase-viewer during a phase run. Sprint 2.1 is already complete. Sprints 2.2 and 2.3 build in parallel, and each card's status bar fills as its tasks are built. 2.3 fails verify and retries while 2.2 waits, then both complete. Sprint 2.4's card opens while it is implemented, and its five tasks read Running, then Built, one after another. It fails verify once, the failure shows under the tasks while it is re-implemented, and it passes on the retry. After doc sync every task reads Complete. Sprint 2.5 finishes with one task blocked, and the rail ends with Phase run complete, 1 task needs your attention." width="100%">
+  <img src="docs/phase-viewer.gif" alt="phase-viewer during Phase 2 of its own build, after typing run phase 2. Sprint 2.1 is already complete. Sprints 2.2 and 2.3 build in parallel in wave 2. 2.3 fails verify on two tests with CRLF line endings, and 2.2 waits while 2.3 retries with the failure attached and passes. Wave 3 builds 2.4. In wave 4, 2.5 stops on a blocked task that needs your call, and the phase reads 27 of 28 tasks with 1 task blocked." width="100%">
 </p>
 
-<sub>A simulated run, replayed from a run log: Phase 2 of this repo's own build, with the failures, the blocker and the per-task progress.</sub>
+<sub>Animated from the run log of Phase 2 of this repo's own build: the real sprints, the verify failure and retry, and the blocker.</sub>
 
 In Claude Code, say *"open the viewer"*. The `phase-viewer` skill starts it in the background and gives you the URL. Ask again later and you get the same URL, since only one viewer runs per project.
 
