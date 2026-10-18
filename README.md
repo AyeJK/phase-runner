@@ -86,9 +86,9 @@ In a Claude app session, the two planning skills publish what they write as Clau
 
 [`phase-runner-hud`](hud/) is an experimental mod plugin for Claude Code built on an early-access API. It adds three things:
 
-- **A status line** while a phase runs. `P8 · wave 2 · 8.3 verify 2/3` is phase 8, wave 2, Sprint 8.3, in verify, attempt 2 of 3. It follows the run log, so it changes within about 2 seconds of each gate result.
+- **A Phase Runner pane** beside the conversation: phase-viewer's screens without a browser tab. Every phase with its status and task bar; a phase's waves and sprint cards with their tasks, the failure being retried, acceptance criteria, verification and run notes. While a phase runs, the top of the pane reads `P8 · wave 2 · 8.3 verify 2/3` (phase 8, wave 2, Sprint 8.3, in verify, attempt 2 of 3) and follows the run log within about 2 seconds of each gate result.
 - **A toast** each time a run stops for you: an escalation (a gate failed on its last allowed attempt), a blocker (an implementer reported a blocked task), or the phase completing.
-- **`/phase-status`**, which prints the phase, how many tasks each sprint has done, the current wave and gate, and when the last event was logged. The mod answers it from the files on disk, with no model call and no tokens.
+- **`/phase-status`**, which opens the pane and prints the phase, how many tasks each sprint has done, the current wave and gate, and when the last event was logged. The mod answers it from the files on disk, with no model call and no tokens.
 
 ```
 /plugin install phase-runner-hud@phase-runner
