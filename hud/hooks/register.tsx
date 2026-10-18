@@ -2,8 +2,8 @@
  * phase-runner-hud: the wiring between Claude Code and `hud.ts` / `pane.tsx`.
  *
  * - `session.start` registers `/phase-status`, takes down the status line an
- *   older version kept, opens the Phase Runner pane when the workspace has a
- *   `docs/phases/`, and starts a 2-second poll.
+ *   older version kept, and starts a 2-second poll. The pane opens only when a
+ *   run is live or on `/phase-status`, never just because `docs/phases/` exists.
  * - Each poll lists `docs/phases/` and `docs/phases/.runs/`, reads the files
  *   that changed, rebuilds the project when anything did, and bumps
  *   `revision` so the pane draws again. It raises any toast that is due, and
@@ -368,8 +368,8 @@ export const register: Register = (on, options) => {
       description: 'Phase Runner: open the pane, and print the running phase, sprint progress, current gate and last event',
     });
     await markStart($, mem, await $.clock.now());
+    // Opens the pane only if a run is live; a project with docs/phases/ and no run keeps it closed.
     await poll($, mem);
-    if (mem.loaded?.hasPhases === true) await openPane($);
     $.clock.every(POLL_MS, () => {
       void poll($, mem);
     });

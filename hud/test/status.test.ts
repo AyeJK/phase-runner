@@ -83,11 +83,12 @@ test('shows no live line for a log that was already stale when the session start
   expect(h.toasts).toEqual([]);
 });
 
-test('opens the pane when the session starts in a Phase Runner project', async ($, on) => {
+test('keeps the pane closed at session start when no run is live', async ($, on) => {
   const h = phase4(on, Date.parse('2026-09-29T09:00:00Z'));
   await h.start($);
+  await h.clock.advance(10_000);
 
-  expect(h.opened).toEqual([PANE_ID]);
+  expect(h.opened).toEqual([]);
 });
 
 test('stays silent with no docs/phases/', async ($, on) => {

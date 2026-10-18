@@ -1,6 +1,6 @@
 {
   "name": "phase-runner-hud",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Experimental Claude Code mod for Phase Runner: a pane with phase-viewer's screens and the live run, a toast when a run needs you, and /phase-status with no model call.",
   "author": {
     "name": "Jeremy Kaye",
