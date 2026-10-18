@@ -6,7 +6,7 @@ Phase Runner works the same without it. Nothing in the main plugin depends on th
 
 ## What it shows
 
-**The pane.** A full alternative to the [phase-viewer](../viewer/) web page, in a pane of its own. It opens when a session starts in a Phase Runner project, again when a run goes live, and on `/phase-status`. Close it from its mark; it stays closed until the next run starts.
+**The pane.** A full alternative to the [phase-viewer](../viewer/) web page, in a pane of its own. It opens when a run goes live (including one already running when the session starts) and on `/phase-status`. A project with `docs/phases/` and no run going keeps it closed. Close it from its mark; it stays closed until the next run starts.
 
 - **Phases.** Every phase, grouped In progress, Not started and Complete, with its badge (`Running · wave 2 of 3`, `Needs you`, `Complete`), its done/eligible task count, parse warnings, and the viewer's status bar. Click a phase to open it.
 - **A phase.** The viewer's phase rail: the heading and badge, a banner for each escalation and for lines that couldn't be read, the status bar, then each wave of the latest run (sequential or parallel, how long it took, its retries) with a card per sprint. A card shows the sprint's state (`Re-verifying`, `Verify failed`, `Needs you`) and its task bar, and opens in place, the running ones from the start: the goal, every task with its status (`Running` and `Built` from the implementer's task lines), the failure being retried and what happens next, then acceptance criteria, dependencies, verification and run notes. A banner under the last wave says when the run is complete or paused, and what needs you.
@@ -100,7 +100,7 @@ Phase Runner works the same without it. Nothing in the main plugin depends on th
 
 ## What it shows
 
-**The pane.** A full alternative to the [phase-viewer](../viewer/) web page, in a pane of its own. It opens when a session starts in a Phase Runner project, again when a run goes live, and on `/phase-status`. Close it from its mark; it stays closed until the next run starts.
+**The pane.** A full alternative to the [phase-viewer](../viewer/) web page, in a pane of its own. It opens when a run goes live (including one already running when the session starts) and on `/phase-status`. A project with `docs/phases/` and no run going keeps it closed. Close it from its mark; it stays closed until the next run starts.
 
 - **Phases.** Every phase, grouped In progress, Not started and Complete, with its badge (`Running · wave 2 of 3`, `Needs you`, `Complete`), its done/eligible task count, parse warnings, and the viewer's status bar. Press a phase's title to open it.
 - **A phase.** The viewer's phase rail: the heading and badge, a banner for each escalation and for lines that couldn't be read, the status bar, then each wave of the latest run (sequential or parallel, how long it took, its retries) with a card per sprint. A card shows the sprint's state (`Re-verifying`, `Verify failed`, `Needs you`) and its task bar, and opens in place, the running ones from the start: the goal, every task with its status (`Running` and `Built` from the implementer's task lines), the failure being retried and what happens next, then acceptance criteria, dependencies, verification and run notes. A banner under the last wave says when the run is complete or paused, and what needs you.

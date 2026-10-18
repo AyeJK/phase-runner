@@ -198,9 +198,10 @@ test('says where it looked when there are no phase plans', async ($, on) => {
 test('/phase-status opens the pane', async ($, on) => {
   const h = phase4(on, QUIET);
   await h.start($);
+  expect(h.opened).toEqual([]);
   await h.phaseStatus($);
 
-  expect(h.opened).toEqual(['phase-runner', 'phase-runner']);
+  expect(h.opened).toEqual(['phase-runner']);
 });
 
 describe('pure parts', () => {
