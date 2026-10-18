@@ -60,7 +60,7 @@ describe('through the loaded mod', () => {
     await run(h, WITH_TASK_LINES);
 
     // One entry per change of text: the 8 task lines add none.
-    expect(h.statuses).toEqual([
+    expect(h.lines).toEqual([
       'P4 · wave 1 · 4.1 done',
       'P4 · wave 2 · 4.2 implement 1/3',
       'P4 · wave 2 · 4.2 verify 1/3',
@@ -82,7 +82,7 @@ describe('through the loaded mod', () => {
     await h.start($);
     await run(h, WITHOUT_TASK_LINES);
 
-    expect(h.statuses).toEqual([
+    expect(h.lines).toEqual([
       'P4 · wave 1 · 4.1 done',
       'P4 · wave 2 · 4.2 implement 1/3',
       'P4 · wave 2 · 4.2 verify 1/3',
@@ -115,7 +115,7 @@ describe('through the loaded mod', () => {
     await h.start($);
     h.append(PHASE_4_LOG, h.line({ sprint: '4.2', gate: 'implement', result: 'start' }));
     await h.tick();
-    const before = [...h.statuses];
+    const before = [...h.lines];
     expect(before.at(-1)).toBe('P4 · wave 2 · 4.2 implement 1/3');
 
     // Not results an implementer writes on a task line; the mod must still not act on them.
@@ -128,18 +128,18 @@ describe('through the loaded mod', () => {
     await h.tick();
     await h.clock.advance(10_000);
 
-    expect(h.statuses).toEqual(before);
+    expect(h.lines).toEqual(before);
     expect(h.toasts).toEqual([]);
   });
 
   test('a task line for a sprint with no other line shows nothing new', async ($, on) => {
     const h = phase4(on);
     await h.start($);
-    const before = [...h.statuses];
+    const before = [...h.lines];
     h.append(PHASE_4_LOG, h.line({ sprint: '4.2', gate: 'task', result: 'start', summary: '1' }));
     await h.tick();
 
-    expect(h.statuses).toEqual(before);
+    expect(h.lines).toEqual(before);
     expect(h.toasts).toEqual([]);
   });
 });
