@@ -4,7 +4,14 @@
  * the title copy, and control characters made visible.
  */
 import { describe, expect, it } from 'vitest';
-import { phaseFiles, visibleRaw, warningGroups, warningsTitle } from '../../src/client/states/warnings.js';
+import {
+  orphanFiles,
+  pageWarningFiles,
+  phaseFiles,
+  visibleRaw,
+  warningGroups,
+  warningsTitle,
+} from '../../src/client/states/warnings.js';
 import { loadProject } from '../../src/core/load.js';
 import { BROKEN, BROKEN_LINES } from '../fixtures/index.js';
 
@@ -30,6 +37,31 @@ describe('warningGroups', () => {
     expect(warningGroups(project, phaseFiles(project, phase))).toHaveLength(1);
     expect(warningGroups(project, [phase.file.replace(/\\/g, '/')])).toHaveLength(1);
     expect(warningGroups(project, ['/elsewhere/Phase-9-Nope.md'])).toHaveLength(0);
+  });
+
+  it('adds files no phase owns to every phase page', async () => {
+    const project = await loadProject(BROKEN.root);
+    const phase = project.phases[0]!;
+    expect(orphanFiles(project)).toEqual([]);
+    expect(pageWarningFiles(project, phase)).toEqual(phaseFiles(project, phase));
+
+    const orphan = `${project.phasesDir}/.runs/phase-9.jsonl`;
+    const withOrphan = {
+      ...project,
+      warnings: [
+        ...project.warnings,
+        { file: orphan, line: 1, raw: 'not json', message: 'Not JSON' },
+        { file: orphan.replace(/\//g, '\\'), line: 2, raw: '{', message: 'Not JSON' },
+      ],
+    };
+    // One entry per file, whatever the separator; the phase's own file is never an orphan.
+    expect(orphanFiles(withOrphan)).toEqual([orphan]);
+    expect(pageWarningFiles(withOrphan, phase)).toEqual([...phaseFiles(withOrphan, phase), orphan]);
+    const groups = warningGroups(withOrphan, pageWarningFiles(withOrphan, phase));
+    expect(groups.map((g) => [g.name, g.lines])).toEqual([
+      ['Phase-1-Broken.md', new Set(project.warnings.map((w) => w.line)).size],
+      ['phase-9.jsonl', 2],
+    ]);
   });
 });
 

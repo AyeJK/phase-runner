@@ -1,107 +1,9 @@
 /*
- * The unified shell (design-system.md "Unified top bar", "Filter row",
- * "Unified states"): the filter row under the top bar, the app-wide banner
- * strip under it, and the main area that holds a workspace state (loading,
- * empty, candidates, not found). The top bar itself is `.app-head` in
- * `../styles/app.css`.
+ * The shell under the top bar (design-system.md "Calmer layout", "Unified
+ * states"): the app-wide banner strip and the main area that holds a
+ * workspace state (loading, empty, candidates, not found). The top bar
+ * itself is `.app-head` in `../styles/app.css`.
  */
-
-/* ---------- Filter row ---------- */
-
-.filter-row {
-  position: sticky;
-  top: var(--head);
-  z-index: 4;
-  display: flex;
-  align-items: stretch;
-  gap: 24px;
-  height: var(--filter);
-  padding: 0 24px;
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
-}
-
-/* Filters scroll sideways when they don't fit; they never wrap. */
-.filters {
-  display: flex;
-  align-items: stretch;
-  gap: 20px;
-  min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-}
-.filters::-webkit-scrollbar {
-  display: none;
-}
-
-.filter {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  gap: 6px;
-  margin: 0 0 -1px;
-  padding: 0;
-  font: 500 14px var(--sans);
-  white-space: nowrap;
-  color: var(--text-2);
-  background: none;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-}
-.filter-count {
-  font: 500 12px var(--mono);
-  color: var(--text-3);
-}
-.filter:hover,
-.filter[aria-pressed='true'] {
-  color: var(--text);
-}
-.filter[aria-pressed='true'] {
-  border-bottom-color: var(--accent);
-}
-.filter[aria-pressed='true'] .filter-count {
-  color: var(--text-2);
-}
-/* The focus ring sits inside the row, where overflow can't clip it. */
-.filter:focus-visible {
-  outline-offset: -2px;
-}
-
-/* List | Kanban: one outline, two segments. */
-.view-toggle {
-  display: flex;
-  flex-shrink: 0;
-  align-self: center;
-  margin-left: auto;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r);
-  overflow: hidden;
-}
-.view-toggle button {
-  padding: 6px 10px;
-  font: 500 13px/1 var(--sans);
-  color: var(--text-2);
-  background: none;
-  border: 0;
-  cursor: pointer;
-}
-.view-toggle button + button {
-  border-left: 1px solid var(--border-strong);
-}
-.view-toggle button:hover,
-.view-toggle button[aria-pressed='true'] {
-  color: var(--text);
-}
-.view-toggle button[aria-pressed='true'] {
-  background: var(--surface-2);
-}
-.view-toggle button:focus-visible {
-  outline-offset: -2px;
-}
-
-/* ---------- Banners and states under the filter row ---------- */
 
 .shell-banners {
   padding: 16px 24px 0;
@@ -117,11 +19,7 @@
 
 /* ---------- Breakpoints ---------- */
 
-@media (max-width: 640px) {
-  .filter-row {
-    gap: 16px;
-    padding: 0 16px;
-  }
+@media (max-width: 719px) {
   .shell-banners {
     padding: 16px 16px 0;
   }

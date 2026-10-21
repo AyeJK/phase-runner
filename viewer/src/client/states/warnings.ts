@@ -17,12 +17,6 @@ export function samePath(file: string): string {
   return /^[a-z]:\//i.test(slashed) ? slashed[0]!.toLowerCase() + slashed.slice(1) : slashed;
 }
 
-/** How many warnings are about the phase file or its run log (the kanban card's "N warnings" tag). */
-export function phaseWarnings(warnings: readonly Warning[], phaseFile: string, runFile: string | null): number {
-  const files = new Set([samePath(phaseFile), ...(runFile ? [samePath(runFile)] : [])]);
-  return warnings.reduce((n, w) => (files.has(samePath(w.file)) ? n + 1 : n), 0);
-}
-
 /** Every warning about one file. */
 export interface WarningGroup {
   /** Absolute path, as the model has it. */
@@ -66,6 +60,28 @@ export function warningGroups(project: Project, files?: readonly string[]): Warn
 export function phaseFiles(project: Project, phase: Pick<Phase, 'number' | 'file'>): string[] {
   const runs = phaseRuns(project, phase.number);
   return runs ? [phase.file, runs.file] : [phase.file];
+}
+
+/**
+ * Files with warnings that no phase owns: a run log whose phase has no plan,
+ * or a file in `docs/phases/` that didn't become a phase. In warning order.
+ */
+export function orphanFiles(project: Project): string[] {
+  const owned = new Set(project.phases.flatMap((p) => phaseFiles(project, p)).map(samePath));
+  const seen = new Set<string>();
+  const files: string[] = [];
+  for (const { file } of project.warnings) {
+    const key = samePath(file);
+    if (owned.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    files.push(file);
+  }
+  return files;
+}
+
+/** The files whose warnings a phase page shows: the phase's own, then every file no phase owns. */
+export function pageWarningFiles(project: Project, phase: Pick<Phase, 'number' | 'file'>): string[] {
+  return [...phaseFiles(project, phase), ...orphanFiles(project)];
 }
 
 /** "3 lines in Phase-1-Broken.md couldn't be read". */

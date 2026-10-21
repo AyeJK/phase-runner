@@ -14,12 +14,11 @@
  * `scripts/simulate-run.ts` (as `rail.spec.ts` does).
  *
  * Ports in use (each test its own pair, all clear of the shared `webServer`
- * on 4790 / 4791): `shell.spec.ts` 4798–4799, `sprint.spec.ts` 4810–4811,
- * `states.spec.ts` 4830–4835, `rail.spec.ts` 4840–4847, `board.spec.ts`
- * 4850–4855.
+ * on 4790 / 4791): `shell.spec.ts` 4798–4799 and 4850–4853,
+ * `sprint.spec.ts` 4810–4811, `states.spec.ts` 4830–4835, `rail.spec.ts`
+ * 4840–4847.
  */
 import { fileURLToPath } from 'node:url';
-import type { Page } from '@playwright/test';
 import { createServer as createViteServer, type ViteDevServer } from 'vite';
 import { prepareFixture, type Freshness, type PreparedFixture } from '../../scripts/simulate-run.js';
 import { startViewerServer, type ViewerServer } from '../../src/server/http.js';
@@ -34,6 +33,8 @@ export interface HarnessOptions {
   freshness?: Freshness;
   /** Fixture folder under `test/fixtures/`. Default `trail-log`. */
   fixture?: string;
+  /** A project folder to copy instead of a fixture (its `docs/`, under the same folder name). */
+  source?: string;
 }
 
 export interface Harness {
@@ -50,22 +51,12 @@ export interface Harness {
 
 const VITE_CONFIG = fileURLToPath(new URL('../../vite.config.ts', import.meta.url));
 
-/**
- * Make the kanban the last layout used, so a bare `/` opens it (a first
- * visit opens the list view). Call before the first `goto`. It only fills in
- * a missing choice, so a layout the test picks later is still remembered.
- */
-export async function startOnKanban(page: Page): Promise<void> {
-  await page.addInitScript(() => {
-    const { localStorage } = globalThis as unknown as {
-      localStorage: { getItem(key: string): string | null; setItem(key: string, value: string): void };
-    };
-    if (localStorage.getItem('phase-viewer:view') === null) localStorage.setItem('phase-viewer:view', 'kanban');
-  });
-}
-
 export async function startHarness(options: HarnessOptions): Promise<Harness> {
-  const fixture = await prepareFixture({ fixture: options.fixture, freshness: options.freshness ?? 'fresh' });
+  const fixture = await prepareFixture({
+    fixture: options.fixture,
+    source: options.source,
+    freshness: options.freshness ?? 'fresh',
+  });
   const workspace = { kind: 'found' as const, root: fixture.root, source: 'dir' as const };
 
   const first = await startViewerServer({ port: options.serverPort, host: HOST, workspace });

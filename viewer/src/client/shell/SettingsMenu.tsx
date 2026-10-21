@@ -69,7 +69,7 @@ export function SettingsMenu() {
           <span className="settings-label" id="settings-theme">
             Theme
           </span>
-          <div className="view-toggle theme-toggle" role="group" aria-labelledby="settings-theme">
+          <div className="theme-toggle" role="group" aria-labelledby="settings-theme">
             {OPTIONS.map((o) => (
               <button key={o.pref} type="button" aria-pressed={pref === o.pref} onClick={() => choose(o.pref)}>
                 {o.label}

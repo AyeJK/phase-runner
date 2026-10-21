@@ -98,7 +98,7 @@ test.describe('the rail in the list view', () => {
     await expect(phasePage.getByTestId('phase-rail')).toHaveAttribute('data-phase', '2');
 
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Phase 2: Library UI');
-    await expect(page.getByTestId('phase-progress-text')).toHaveText('1/8 tasks');
+    await expect(page.getByTestId('phase-progress-text')).toHaveText('1 of 8 tasks');
     // The phase's status bar: the sprint bar over every task in the phase. To-do tasks in
     // sprints already under way ("to do", amber) come before those in sprints not started.
     const phaseBar = page.getByTestId('phase-status-bar');
@@ -109,7 +109,8 @@ test.describe('the rail in the list view', () => {
     await expect(page.getByTestId('phase-status')).toHaveText('1 task blocked');
     // No file path under the title.
     await expect(phasePage).not.toContainText('docs/phases/Phase-2-Library-UI.md');
-    await expect(phasePage.locator('h2.rail-h')).toHaveText('Sprints');
+    // Waves are heading lines over the sprint rows (Sprint 9.3), with no "Sprints" heading.
+    await expect(phasePage.locator('h2.wave-h').first()).toContainText('Wave 1');
 
     const order = await phasePage.locator('article[data-sprint-card]').evaluateAll((cards) =>
       cards.map((c) => (c as unknown as { getAttribute(name: string): string | null }).getAttribute('data-sprint-card')),
@@ -243,8 +244,8 @@ test.describe('the rail in the list view', () => {
   test('a finished phase and a phase not started', async ({ page }) => {
     await open(page, '/list?phase=1');
     await expect(page.getByTestId('phase-status')).toHaveText('Complete');
-    await expect(page.getByTestId('phase-progress-text')).toHaveText('6/6 tasks');
-    // A Complete card drops its status bar; the badge carries it.
+    await expect(page.getByTestId('phase-progress-text')).toHaveText('6 of 6 tasks');
+    // A Complete row drops its status bar; its green check carries it.
     const complete = page.locator('article[data-sprint-card][data-state="complete"]');
     await expect(complete.first()).toBeVisible();
     await expect(complete.getByTestId('card-status-bar')).toHaveCount(0);
@@ -259,6 +260,209 @@ test.describe('the rail in the list view', () => {
     await expect(page.locator('section[data-rail-row="not-run"] article[data-sprint-card]')).toHaveCount(2);
   });
 });
+
+// ---------------------------------------------------------------------------
+// One type voice and quiet ids (Sprint 9.4, design-system.md "Calmer layout", Type changes)
+// ---------------------------------------------------------------------------
+
+/** `--text-3` as computed: dark `#8a837a`, light `#6e665c`. */
+const TEXT_3 = { dark: 'rgb(138, 131, 122)', light: 'rgb(110, 102, 92)' } as const;
+
+/**
+ * Visible elements whose own text is uppercase by CSS, outside status badges,
+ * tags and the tasks table's status words (which keep the chip type). Run in
+ * the page as a string, since this file is type-checked without the DOM lib.
+ */
+const STRAY_UPPERCASE = `(() => {
+  const out = [];
+  for (const el of document.body.querySelectorAll('*')) {
+    if (getComputedStyle(el).textTransform !== 'uppercase') continue;
+    if (el.closest('.status, .tag, td.st')) continue;
+    if (el.getClientRects().length === 0) continue;
+    const own = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim() !== '');
+    if (own) out.push(el.className || el.tagName);
+  }
+  return out;
+})()`;
+
+/**
+ * Text below 4.5:1 among the visible elements matching `selectors`: the text
+ * colour against the background it sits on, with translucent tints laid over
+ * the first opaque ancestor fill. Returns "selector: text ratio" lines.
+ */
+function lowContrast(selectors: string[]): string {
+  return `((selectors) => {
+    const parse = (s) => {
+      let m = s.match(/^rgba?\\(([^)]+)\\)$/);
+      if (m) {
+        const p = m[1].split(/[\\s,/]+/).filter(Boolean).map(Number);
+        return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1];
+      }
+      m = s.match(/^color\\(srgb ([^)]+)\\)$/);
+      if (m) {
+        const p = m[1].split(/[\\s/]+/).filter(Boolean).map(Number);
+        return [p[0] * 255, p[1] * 255, p[2] * 255, p.length > 3 ? p[3] : 1];
+      }
+      return null;
+    };
+    const over = (top, under) => [0, 1, 2].map((i) => top[i] * top[3] + under[i] * (1 - top[3])).concat(1);
+    const lum = (c) => {
+      const [r, g, b] = c.slice(0, 3).map((v) => {
+        v /= 255;
+        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const backdrop = (el) => {
+      const layers = [];
+      for (let e = el; e; e = e.parentElement) {
+        const c = parse(getComputedStyle(e).backgroundColor);
+        if (c && c[3] > 0) {
+          layers.push(c);
+          if (c[3] >= 1) break;
+        }
+      }
+      let base = parse(getComputedStyle(document.body).backgroundColor);
+      for (let i = layers.length - 1; i >= 0; i--) base = over(layers[i], base);
+      return base;
+    };
+    const out = [];
+    for (const sel of selectors) {
+      for (const el of document.querySelectorAll(sel)) {
+        if (el.getClientRects().length === 0 || el.textContent.trim() === '') continue;
+        const bg = backdrop(el);
+        const fg = over(parse(getComputedStyle(el).color), bg);
+        const a = lum(fg), b = lum(bg);
+        const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+        if (ratio < 4.5) out.push(sel + ': ' + el.textContent.trim().slice(0, 24) + ' ' + ratio.toFixed(2));
+      }
+    }
+    return out;
+  })(${JSON.stringify(selectors)})`;
+}
+
+/** The text the light-theme pass reads: every element Phase 9 added, plus the open card. */
+const NEW_TEXT = [
+  '.project-name',
+  '.side-h',
+  '.side-h b',
+  '.ph-n',
+  '.ph-t',
+  '.ph-count',
+  '.switch .n',
+  '.switch .t',
+  '.page-title .eyebrow',
+  '.page-name',
+  // The `·` separators are decoration in --border-strong, not text to read.
+  '.meta > span:not(.sep)',
+  '.meta-state',
+  '.wave-h',
+  '.wave-h b',
+  '.wave-h .par',
+  '.wave-h .live',
+  '.sid',
+  '.sname',
+  '.status',
+  '.tag',
+  '.card-desc',
+  '.card-sub .label',
+  '.card-sub > span:last-child',
+  '.tasks td.st',
+  '.tasks .n',
+  '.tasks .t',
+  '.tasks .note',
+  '.card-row-label',
+  '.card-row-end',
+];
+
+test.describe('type voice and quiet ids', () => {
+  test('labels are sentence case Sans with no letter spacing; only badges and tags stay uppercase', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await open(page, '/phase/2');
+    const card = page.locator('article[data-sprint-card="2.1"]');
+    await card.getByTestId('card-toggle').click();
+    await expect(card).toHaveAttribute('data-open', 'true');
+
+    for (const label of [card.locator('.card-sub .label'), card.locator('.card-row-label').first()]) {
+      await expect(label).toHaveCSS('text-transform', 'none');
+      await expect(label).toHaveCSS('letter-spacing', 'normal');
+      await expect(label).toHaveCSS('font-size', '12px');
+      await expect(label).toHaveCSS('font-weight', '600');
+      await expect(label).toHaveCSS('font-family', /IBM Plex Sans/);
+    }
+    // The settings dropdown's "Theme".
+    await page.locator('.app-head').getByRole('button', { name: 'Settings' }).click();
+    const theme = page.getByTestId('settings-menu').locator('.settings-label');
+    await expect(theme).toHaveText('Theme');
+    await expect(theme).toHaveCSS('text-transform', 'none');
+    await expect(theme).toHaveCSS('letter-spacing', 'normal');
+    await expect(theme).toHaveCSS('font-family', /IBM Plex Sans/);
+
+    expect(await page.evaluate(STRAY_UPPERCASE)).toEqual([]);
+
+    // Status badges keep the chip type, a little tighter: 4px 7px, .06em.
+    const badge = card.locator('.status').first();
+    await expect(badge).toHaveCSS('text-transform', 'uppercase');
+    await expect(badge).toHaveCSS('padding', '4px 7px');
+    await expect(badge).toHaveCSS('letter-spacing', '0.66px');
+  });
+
+  test('sprint ids are grey in both themes', async ({ page }) => {
+    for (const scheme of ['dark', 'light'] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await open(page, '/phase/2');
+      await expect(page.locator('html')).toHaveAttribute('data-theme', scheme);
+      const ids = page.locator('article[data-sprint-card] .sid');
+      await expect(ids.first()).toBeVisible();
+      for (const id of await ids.all()) await expect(id).toHaveCSS('color', TEXT_3[scheme]);
+    }
+  });
+});
+
+// The light-theme pass: every new element readable (4.5:1 for text), no sideways scroll, a screenshot each.
+for (const width of [375, 1280]) {
+  test.describe(`light theme at ${width} px`, () => {
+    test.use({ viewport: { width, height: width < 720 ? 812 : 900 } });
+
+    test('text is 4.5:1 or more, nothing scrolls sideways', async ({ page }, testInfo) => {
+      await page.emulateMedia({ colorScheme: 'light' });
+      for (const route of ['/phase/2', '/phase/3']) {
+        await open(page, route);
+        await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+        const first = page.locator('article[data-sprint-card]').first();
+        await first.getByTestId('card-toggle').click();
+        await expect(first).toHaveAttribute('data-open', 'true');
+        await first.locator('details.card-row summary').first().click();
+
+        expect(await page.evaluate(lowContrast(NEW_TEXT))).toEqual([]);
+        expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+
+        // A hovered row sits on --surface-2: its id and badge still read.
+        for (const head of await page.locator('.sprint-head').all()) {
+          await head.hover();
+          expect(await page.evaluate(lowContrast(['.sprint-head:hover .sid', '.sprint-head:hover .status']))).toEqual([]);
+        }
+
+        // From the top, with no row hovered, so the sticky bars sit where they belong in the full-page shot.
+        await page.mouse.move(0, 0);
+        await page.evaluate('window.scrollTo(0, 0)');
+        const name = `light-${width}${route.replace(/\//g, '-')}.png`;
+        await page.screenshot({ path: testInfo.outputPath(name), fullPage: true });
+        await testInfo.attach(name, { path: testInfo.outputPath(name), contentType: 'image/png' });
+      }
+
+      if (width < 720) {
+        // The switcher's sheet: the same rows as the sidebar, on --surface.
+        await page.getByTestId('phase-switcher').click();
+        await expect(page.getByTestId('phase-sheet')).toBeVisible();
+        expect(await page.evaluate(lowContrast(['.sheet .side-h', '.sheet .ph-n', '.sheet .ph-t', '.sheet .ph-count']))).toEqual([]);
+        expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+        await page.screenshot({ path: testInfo.outputPath('light-375-sheet.png') });
+        await testInfo.attach('light-375-sheet.png', { path: testInfo.outputPath('light-375-sheet.png'), contentType: 'image/png' });
+      }
+    });
+  });
+}
 
 test.describe('375 px', () => {
   test.use({ viewport: { width: 375, height: 812 } });

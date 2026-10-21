@@ -1,8 +1,8 @@
 /*
- * App-wide pieces (design-system.md "Unified top bar", "Status bar",
- * "Layout constants and breakpoints"): the top bar and wordmark, the status
- * bar, links and screen-reader text. The filter row and state area are in
- * `shell/shell.css`; the kanban, list view and rail have their own files.
+ * App-wide pieces (design-system.md "Calmer layout" Top bar, "Status bar"):
+ * the top bar (wordmark, project name, settings), the status bar, links and
+ * screen-reader text. The banner strip and state area are in
+ * `shell/shell.css`; the list view and rail have their own files.
  */
 
 .app {
@@ -38,6 +38,7 @@
   z-index: 5;
   display: flex;
   align-items: center;
+  gap: 16px;
   padding: 0 24px;
   height: var(--head);
   background: var(--surface);
@@ -52,7 +53,7 @@
 
 .wm {
   display: block;
-  height: 28px;
+  height: 20px;
   width: auto;
   color: var(--wordmark);
   filter: var(--wordmark-glow);
@@ -62,10 +63,29 @@
   margin: 0 auto 20px;
 }
 
+/* The right end: the project name, then the gear. The name shrinks first. */
+.head-end {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  margin-left: auto;
+}
+/* The project folder's name, so two viewers can be told apart; the full path is its tooltip. */
+.project-name {
+  min-width: 0;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 13px var(--sans);
+  color: var(--text-2);
+}
+
 /* Settings (shell/SettingsMenu.tsx): the gear at the right, its dropdown under it. */
 .settings {
   position: relative;
-  margin-left: auto;
+  flex-shrink: 0;
 }
 .settings-btn {
   display: flex;
@@ -103,18 +123,38 @@
   box-shadow: 0 8px 24px -8px var(--scrim);
 }
 .settings-label {
-  font: 500 11px var(--mono);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font: 600 12px var(--sans);
   color: var(--text-3);
 }
-/* The List | Kanban toggle's look (shell/shell.css), full width in the dropdown. */
-.view-toggle.theme-toggle {
+/* Light | Dark | System: one outline, three segments, full width in the dropdown. */
+.theme-toggle {
+  display: flex;
   align-self: stretch;
-  margin-left: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r);
+  overflow: hidden;
 }
 .theme-toggle button {
   flex: 1;
+  padding: 6px 10px;
+  font: 500 13px/1 var(--sans);
+  color: var(--text-2);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.theme-toggle button + button {
+  border-left: 1px solid var(--border-strong);
+}
+.theme-toggle button:hover,
+.theme-toggle button[aria-pressed='true'] {
+  color: var(--text);
+}
+.theme-toggle button[aria-pressed='true'] {
+  background: var(--surface-2);
+}
+.theme-toggle button:focus-visible {
+  outline-offset: -2px;
 }
 
 /* ---------- Status bar ---------- */
@@ -182,11 +222,21 @@ a.link:hover {
 
 /* ---------- Breakpoints ---------- */
 
-@media (max-width: 640px) {
+@media (max-width: 1099px) {
   .app-head {
+    padding: 0 20px;
+  }
+}
+
+@media (max-width: 719px) {
+  .app-head {
+    gap: 12px;
     padding: 0 16px;
   }
   .wm {
-    height: 20px;
+    height: 16px;
+  }
+  .head-end {
+    gap: 8px;
   }
 }

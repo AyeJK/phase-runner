@@ -1,15 +1,20 @@
 /**
- * One sprint card on the phase rail (design-system.md "Rail sprint cards",
- * "Sprint card states", "Run notes"). Everything shown comes from
- * `derive.ts`'s {@link RailSprint}; this file only draws it.
+ * One sprint row on the phase page (design-system.md "Calmer layout": "Waves
+ * and sprint rows"; the open body is "Rail sprint cards", "Sprint card
+ * states", "Run notes"). Everything shown comes from `derive.ts`'s
+ * {@link RailSprint}; this file only draws it.
  *
- * - Collapsed: a toggle row ("Sprint 2.1", the title, the state badge and a
- *   chevron), then the sprint's status bar (left out once it's Complete; the
- *   badge says it all). While the sprint is implemented the bar fills in the
- *   running colour, a task at a time, from the implementer's `task` lines. A
- *   card that turns Complete while on screen keeps its all-green bar for
+ * - Collapsed: a toggle row (the id "2.1" in grey mono, read as "Sprint 2.1";
+ *   the title; the end item; a chevron), then a 4px status bar under the
+ *   title while the sprint isn't Complete. The end item is the state badge,
+ *   except Complete, which is the green `pass` icon alone (its word hidden).
+ *   Colour is an edge, not a border: a 2px left edge in the running, failed,
+ *   needs-you or manual colour, and the amber tint and edge for Waiting.
+ *   While the sprint is implemented the bar fills in the running colour, a
+ *   task at a time, from the implementer's `task` lines. A row that turns
+ *   Complete while on screen keeps its all-green bar for
  *   {@link COMPLETE_BAR_MS} first.
- * - Open: the goal, the tasks table (shared `TasksTable`, not-started rows in
+ * - Open, inside the same row: the goal, the tasks table (shared `TasksTable`, not-started rows in
  *   amber once the sprint has begun, and rows following the implementer's
  *   `task` lines as Running then Built until doc sync), the failure being retried (while there
  *   is one), then collapsed rows: Acceptance criteria (count), Dependencies
@@ -47,24 +52,25 @@ function badgeKind(state: SprintState): 'run' | 'fail' | 'pass' | 'needs' | 'man
   return 'remaining';
 }
 
-/** Card class per state: the border and tint the design gives each. */
-function cardClass(state: SprintState, dashed: boolean): string {
-  if (dashed) return 'rail-card dashed';
-  if (isGateState(state)) return 'rail-card run';
-  if (isFailedState(state)) return 'rail-card fail';
-  if (state === 'needs-you') return 'rail-card needs';
-  if (state === 'manual') return 'rail-card manual';
-  if (state === 'waiting') return 'rail-card remaining';
-  return 'rail-card';
+/** Row class per state: the edge (and, for Waiting, the tint) the design gives each. */
+function rowClass(state: SprintState, dashed: boolean): string {
+  const classes = ['sprint-row'];
+  if (isGateState(state)) classes.push('run');
+  else if (isFailedState(state)) classes.push('fail');
+  else if (state === 'needs-you') classes.push('needs');
+  else if (state === 'manual') classes.push('manual');
+  else if (state === 'waiting') classes.push('remaining');
+  if (dashed) classes.push('dashed');
+  return classes.join(' ');
 }
 
 export interface SprintCardProps {
   sprint: RailSprint;
   open: boolean;
   onToggle: () => void;
-  /** In the "Not run yet" group: dashed and transparent. */
+  /** In the "Not run yet" group (a dashed list): the title in `--text-2`. */
   dashed: boolean;
-  /** Heading level of the card title (one below the rail's "Sprints" heading). */
+  /** Heading level of the row title (one below its wave's heading line). */
   headingLevel: 2 | 3 | 4;
 }
 
@@ -75,36 +81,41 @@ export function SprintCard({ sprint, open, onToggle, dashed, headingLevel }: Spr
   const justCompleted = useJustCompleted(sprint.state);
   return (
     <article
-      className={cardClass(sprint.state, dashed)}
+      className={rowClass(sprint.state, dashed)}
       id={paths.sprintSection(sprint.id)}
       data-sprint-card={sprint.id}
       data-state={sprint.state}
       data-open={open ? 'true' : 'false'}
     >
-      <Heading className="card-h">
-        <button
-          type="button"
-          className="card-toggle"
-          aria-expanded={open}
-          aria-controls={bodyId}
-          data-testid="card-toggle"
-          onClick={onToggle}
-        >
-          <span className="sid">Sprint {sprint.id}</span>
-          <span className="sname">{title}</span>
-          <span className="card-end">
-            <StateBadge state={sprint.state} text={sprint.stateText} />
+      <div className="sprint-head">
+        <Heading className="card-h">
+          <button
+            type="button"
+            className="card-toggle"
+            aria-expanded={open}
+            aria-controls={bodyId}
+            data-testid="card-toggle"
+            onClick={onToggle}
+          >
+            <span className="sid">
+              <span className="visually-hidden">Sprint </span>
+              {sprint.id}
+            </span>
+            <span className="sname">{title}</span>
+            <span className="card-end">
+              <RowEnd state={sprint.state} text={sprint.stateText} />
+            </span>
             <ChevronIcon className="card-chev" />
-          </span>
-        </button>
-      </Heading>
-      {(sprint.state !== 'complete' || justCompleted) && (
-        <StatusSegments
-          progress={sprint.progress}
-          live={liveTaskCounts(sprint.sprint.tasks, liveTaskStates(sprint.run))}
-          testId="card-status-bar"
-        />
-      )}
+          </button>
+        </Heading>
+        {(sprint.state !== 'complete' || justCompleted) && (
+          <StatusSegments
+            progress={sprint.progress}
+            live={liveTaskCounts(sprint.sprint.tasks, liveTaskStates(sprint.run))}
+            testId="card-status-bar"
+          />
+        )}
+      </div>
 
       <div className="card-body" id={bodyId} hidden={!open} data-testid="card-body">
         {open && <CardBody sprint={sprint} />}
@@ -178,6 +189,20 @@ function CardBody({ sprint }: { sprint: RailSprint }) {
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * A row's end item: Complete is the green `pass` icon alone, its word kept
+ * for screen readers (status by exception); every other state keeps its badge.
+ */
+function RowEnd({ state, text }: { state: SprintState; text: string }) {
+  if (state !== 'complete') return <StateBadge state={state} text={text} />;
+  return (
+    <span className="row-done" data-testid="card-state" data-state={state}>
+      <StatusIcon kind="pass" />
+      <span className="visually-hidden">{text}</span>
+    </span>
   );
 }
 

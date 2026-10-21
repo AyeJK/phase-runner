@@ -1,12 +1,12 @@
 /**
  * Not found (design-system.md "Not found", "Unified states"): an unknown
- * phase (in the slide-in panel or the list view's rail) or any other address
- * (under the filter row) shows a message in the `.empty` block with a link
- * back to the phases (`/`). The shell stays around it.
+ * phase (in the list view's rail side) or any other address (under the top
+ * bar) shows a message in the `.empty` block with a link back to the phases
+ * (`/`). The shell stays around it.
  *
  * An unknown sprint never gets here on its own: `/sprint/:id` redirects to
- * its phase's panel, so an unknown sprint of an unknown phase shows that
- * phase as not found.
+ * its phase (`/phase/:n#s{id}`), so an unknown sprint of an unknown phase
+ * shows that phase as not found.
  *
  * Test hooks: `[data-testid=not-found]` with `data-kind` (`phase` or
  * `page`), `not-found-overview` (the link).
@@ -20,7 +20,7 @@ function NotFound({ kind, title, text }: { kind: 'phase' | 'page'; title: string
       <h3>{title}</h3>
       <p>{text}</p>
       <p className="state-next">
-        <Link className="link" to={paths.board()} data-testid="not-found-overview">
+        <Link className="link" to={paths.home()} data-testid="not-found-overview">
           Back to phases
         </Link>
       </p>
@@ -28,7 +28,7 @@ function NotFound({ kind, title, text }: { kind: 'phase' | 'page'; title: string
   );
 }
 
-/** `?phase=N` for a number no phase plan has. */
+/** `/phase/N` for a number no phase plan has. */
 export function PhaseNotFound({ number }: { number: number }) {
   return <NotFound kind="phase" title={`Phase ${number} not found`} text={`There's no Phase ${number} in the phase plans.`} />;
 }

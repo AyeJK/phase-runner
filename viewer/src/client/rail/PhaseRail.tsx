@@ -1,38 +1,40 @@
 /**
- * The phase rail (design-system.md "Phase rail", "Rail sprint cards", and
- * the heading bar of "Slide-in panel"): one phase's sprints in plan order as
- * sprint cards, with waves as a layer beside them.
+ * The phase page (design-system.md "Calmer layout": "Phase page", "Waves and
+ * sprint rows"; the open row's body is "Rail sprint cards"): one phase's
+ * sprints in plan order, as rows in one list per wave.
  *
- * Top to bottom:
+ * Top to bottom, inside a page capped at `--content` and centred:
  *
- * - The 56px heading bar: an optional `lead` (the slide-in panel's back
- *   arrow), "Phase 2" and the title, "N/M tasks" and the phase's badge.
- * - Banners: open escalations, then parse warnings for the phase file and
- *   its run log.
- * - The phase's status bar.
- * - The "Sprints" line: "2 waves · 1 retry" (or the plain tag "No run log").
- * - One row per rail group from `railView`: the 180px wave cell (name with a
- *   check when done, mode, duration, retries) beside that group's cards.
- * - Once the run has ended (`runEnd`): "Phase run complete", in green, or
- *   pink / violet with what needs you ("1 task needs your attention").
+ * - The header: the eyebrow "Phase 2" (hidden below 720px, where the phase
+ *   switcher already says it), the title `h1`, and the meta line: "Complete
+ *   · 55 of 55 tasks · 4 waves, 69 min · No retries · Finished Oct 3, 5:14 PM".
+ * - The phase's status bar, unless the phase is complete.
+ * - Banners: open escalations, parse warnings for the phase file and its run
+ *   log (and for any file no phase owns), then, once the run has ended with
+ *   something left for you, the pink or violet run-end banner ("Run paused ·
+ *   1 task needs your attention"). There's no green "Phase run complete"
+ *   banner: the meta line says it.
+ * - One section per rail group from `railView`: a heading line ("Wave 2 ·
+ *   Running · Parallel · 12 min so far · 1 retry", or "No run log" / "Not run
+ *   yet") over one bordered list of sprint rows (dashed for "Not run yet").
  *
- * Cards start collapsed except the running ones (a gate running, or a failed
+ * Rows start collapsed except the running ones (a gate running, or a failed
  * one about to be retried; a sprint that starts running later opens as it
- * starts); `#s{id}` opens that card and scrolls to it.
- * Opening or closing a card never changes another card. The rail keeps that
- * state across live updates, so render it with `key={phase.number}` when the
- * phase can change under it.
+ * starts); `#s{id}` opens that row and scrolls to it. Opening or closing a
+ * row never changes another. The page keeps that state across live updates,
+ * so render it with `key={phase.number}` when the phase can change under it.
  *
  * Everything shown comes from `railView` (`derive.ts`), recomputed on every
  * stream update and once a minute while a wave is running (its "so far").
  *
- * Test hooks: `phase-rail` (with `data-phase`), `phase-progress-text`,
- * `phase-status`, `phase-status-bar`, `rail-summary`,
- * `section[data-rail-row]` (with `data-kind`, `data-row-state`),
- * `wave-name`, `wave-mode`, `wave-duration`, `wave-retries`,
+ * Test hooks: `phase-rail` (with `data-phase`), `phase-meta`, `phase-status`
+ * (with `data-status`), `phase-progress-text`, `rail-summary` (the waves
+ * item), `rail-retries`, `phase-time`, `phase-status-bar`,
+ * `section[data-rail-row]` (with `data-kind`, `data-row-state`), `wave-name`,
+ * `wave-live`, `wave-mode`, `wave-duration`, `wave-retries`,
  * `escalation-banner`, `run-end` (with `data-kind`), plus those in `SprintCard.tsx`.
  */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Escalation, Phase, Project } from '../../core/model.js';
 import { StatusIcon } from '../components/StatusIcon.js';
 import { StatusSegments } from '../components/StatusSegments.js';
@@ -41,27 +43,19 @@ import { plural } from '../format.js';
 import { ESCALATION_TEXT, escalationTitle } from '../live/derive.js';
 import { paths, useRouter } from '../shell/router.js';
 import { ParseWarnings } from '../states/ParseWarnings.js';
-import { phaseFiles } from '../states/warnings.js';
-import { StatusBadge } from '../sprint/parts.js';
-import { phaseBadge } from '../sprint/status.js';
-import { isActiveState, railView, runEnd, type RailRow, type RailView, type RunEnd } from './derive.js';
+import { pageWarningFiles } from '../states/warnings.js';
+import { isActiveState, railView, runEnd, type PhaseMeta, type RailRow, type RailView, type RunEnd } from './derive.js';
 import { SprintCard } from './SprintCard.js';
 import './rail.css';
 
 export interface PhaseRailProps {
   project: Project;
   phase: Phase;
-  /** Drawn first in the heading bar, before "Phase N": the slide-in panel's back arrow. */
-  lead?: ReactNode;
-  /** Level of the phase title heading: 1 on its own page (default), 2 inside a panel. */
+  /** Level of the phase title heading: 1 on its own page (default). */
   headingLevel?: 1 | 2;
-  /** `id` of the title heading, for the panel's `aria-labelledby`. */
-  titleId?: string;
-  /** App-wide banners shown before the phase's own (the connection-lost banner inside the slide-in panel). */
-  banners?: ReactNode;
 }
 
-export function PhaseRail({ project, phase, lead, headingLevel = 1, titleId, banners }: PhaseRailProps) {
+export function PhaseRail({ project, phase, headingLevel = 1 }: PhaseRailProps) {
   // Re-derived on every update, and each minute while a wave runs.
   const [tick, setTick] = useState(0);
   const view = useMemo(() => railView(project, phase, Date.now()), [project, phase, tick]);
@@ -77,91 +71,176 @@ export function PhaseRail({ project, phase, lead, headingLevel = 1, titleId, ban
 
   const runs = phaseRuns(project, phase.number);
   const progress = project.progress.byPhase[String(phase.number)];
-  const done = progress?.done ?? 0;
-  const eligible = progress?.eligible ?? 0;
 
   const Title = `h${headingLevel}` as const;
-  const Sub = `h${headingLevel + 1}` as 'h2' | 'h3';
+  const WaveHeading = `h${headingLevel + 1}` as 'h2' | 'h3';
   const cardLevel = (headingLevel + 2) as 3 | 4;
 
   return (
     <div className="phase-rail" data-testid="phase-rail" data-phase={phase.number}>
-      <header className="rail-head">
-        {lead}
-        {/* Named outright: the flex layout would otherwise read "Phase 2 : Title" (it names the panel's dialog too). */}
-        <Title className="rail-title" id={titleId} aria-label={phaseLabel(phase)}>
-          <span className="num">
-            Phase {phase.number}
-            {phase.title !== '' && <span className="visually-hidden">:</span>}
-          </span>{' '}
-          {phase.title !== '' && (
-            <span className="rail-name" title={phase.title}>
-              {phase.title}
-            </span>
+      <header className="page-head">
+        {/* Named outright: the eyebrow and title would otherwise read "Phase 2 : Title". */}
+        <Title className="page-title" aria-label={phaseLabel(phase)}>
+          {phase.title !== '' ? (
+            <>
+              <span className="eyebrow">
+                Phase {phase.number}
+                <span className="visually-hidden">:</span>
+              </span>{' '}
+              <span className="page-name">{phase.title}</span>
+            </>
+          ) : (
+            <span className="page-name">Phase {phase.number}</span>
           )}
         </Title>
-        <span className="rail-count" data-testid="phase-progress-text">
-          {done}/{eligible} {eligible === 1 ? 'task' : 'tasks'}
-        </span>
-        <StatusBadge badge={phaseBadge(project, phase)} testId="phase-status" />
+        <MetaLine meta={view.meta} />
       </header>
 
-      <div className="rail-body">
-        <div className="rail-banners">
-          {banners}
-          {(runs?.escalations ?? []).map((escalation) => (
-            <EscalationBanner key={escalation.line} escalation={escalation} />
-          ))}
-          <ParseWarnings project={project} files={phaseFiles(project, phase)} />
-        </div>
+      {!view.meta.complete && (
+        <StatusSegments
+          progress={progress}
+          notStarted={notStartedTasks(project, phase)}
+          testId="phase-status-bar"
+        />
+      )}
 
-        <StatusSegments progress={progress} notStarted={notStartedTasks(project, phase)} testId="phase-status-bar" />
+      <div className="page-banners">
+        {(runs?.escalations ?? []).map((escalation) => (
+          <EscalationBanner key={escalation.line} escalation={escalation} />
+        ))}
+        <ParseWarnings project={project} files={pageWarningFiles(project, phase)} />
+        {end && end.kind !== 'pass' && <RunEndBanner end={end} />}
+      </div>
 
-        <div className="rail-meta">
-          <Sub className="rail-h">Sprints</Sub>
-          {view.hasRunLog ? (
-            <span data-testid="rail-summary">
-              <b>{plural(view.waves, 'wave')}</b> · {plural(view.retries, 'retry', 'retries')}
-            </span>
-          ) : (
-            <span className="tag" data-testid="rail-summary">
-              No run log
-            </span>
-          )}
-        </div>
-
+      <div className="waves">
         {view.rows.map((row) => (
           <section
             key={row.key}
-            className="rail-row"
+            className={`wave ${row.kind}`}
             aria-label={row.label}
             data-rail-row={row.key}
             data-kind={row.kind}
             data-row-state={row.state ?? ''}
           >
-            <WaveCell row={row} />
-            <div className="rail-cards">
+            <WaveHeading className="wave-h">
+              <WaveLine row={row} />
+            </WaveHeading>
+            <ul className={row.kind === 'not-run' ? 'sprints dashed' : 'sprints'}>
               {row.sprints.map((sprint) => (
-                <SprintCard
-                  key={sprint.id}
-                  sprint={sprint}
-                  open={open.ids.has(sprint.id)}
-                  onToggle={() => open.toggle(sprint.id)}
-                  dashed={row.kind === 'not-run'}
-                  headingLevel={cardLevel}
-                />
+                <li key={sprint.id}>
+                  <SprintCard
+                    sprint={sprint}
+                    open={open.ids.has(sprint.id)}
+                    onToggle={() => open.toggle(sprint.id)}
+                    dashed={row.kind === 'not-run'}
+                    headingLevel={cardLevel}
+                  />
+                </li>
               ))}
-            </div>
+            </ul>
           </section>
         ))}
-
-        {end && <RunEndBanner end={end} />}
       </div>
     </div>
   );
 }
 
-/** Under the last wave once the run has ended: complete, or what needs you. */
+/** Items joined by a dot in `--border-strong`. */
+function Dotted({ items }: { items: ReactNode[] }) {
+  return (
+    <>
+      {items.map((item, i) => (
+        <Fragment key={i}>
+          {i > 0 && (
+            <span className="sep" aria-hidden="true">
+              ·
+            </span>
+          )}
+          {item}
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
+/** "Complete · 55 of 55 tasks · 4 waves, 69 min · No retries · Finished Oct 3, 5:14 PM". */
+function MetaLine({ meta }: { meta: PhaseMeta }) {
+  const items: ReactNode[] = [
+    <span key="state" className={`meta-state ${meta.stateKind}`} data-testid="phase-status" data-status={meta.stateKind}>
+      {meta.stateIcon !== null && <StatusIcon kind={meta.stateIcon} />}
+      {meta.stateText}
+    </span>,
+    <span key="tasks" data-testid="phase-progress-text">
+      {meta.tasksText}
+    </span>,
+    <span key="waves" data-testid="rail-summary">
+      {meta.wavesText}
+    </span>,
+  ];
+  if (meta.retriesText !== null) {
+    items.push(
+      <span key="retries" data-testid="rail-retries">
+        {meta.retriesText}
+      </span>,
+    );
+  }
+  if (meta.timeText !== null) {
+    items.push(
+      <span key="time" data-testid="phase-time">
+        {meta.timeText}
+      </span>,
+    );
+  }
+  return (
+    <p className="meta" data-testid="phase-meta">
+      <Dotted items={items} />
+    </p>
+  );
+}
+
+/**
+ * A wave's heading line: "Wave 2 · Running · Parallel · 12 min so far · 1
+ * retry". The dashed groups read "No run log" / "Not run yet" alone. No done check.
+ */
+function WaveLine({ row }: { row: RailRow }) {
+  const name = (
+    <b key="name" data-testid="wave-name">
+      {row.label}
+    </b>
+  );
+  if (row.kind !== 'wave') return <Dotted items={[name]} />;
+  const items: ReactNode[] = [name];
+  if (row.state === 'running') {
+    items.push(
+      <span key="live" className="live" data-testid="wave-live">
+        <StatusIcon kind="run" />
+        Running
+      </span>,
+    );
+  }
+  items.push(
+    <span key="mode" className={row.parallel ? 'par' : undefined} data-testid="wave-mode">
+      {row.parallel ? 'Parallel' : 'Sequential'}
+    </span>,
+  );
+  if (row.durationText !== null) {
+    items.push(
+      <span key="dur" data-testid="wave-duration">
+        {row.durationText}
+      </span>,
+    );
+  }
+  if (row.retries > 0) {
+    items.push(
+      <span key="retries" data-testid="wave-retries">
+        {plural(row.retries, 'retry', 'retries')}
+      </span>,
+    );
+  }
+  return <Dotted items={items} />;
+}
+
+/** Under the meta line once the run has ended with something left for you: pink or violet. */
 function RunEndBanner({ end }: { end: RunEnd }) {
   return (
     <div className={`banner rail-end ${end.kind}`} role="status" data-testid="run-end" data-kind={end.kind}>
@@ -182,9 +261,9 @@ function RunEndBanner({ end }: { end: RunEnd }) {
 }
 
 /**
- * Which cards are open. Starts with the running ones; a card that starts
- * running later opens once, as it starts; `#s{id}` opens that card and
- * scrolls to it. Toggling changes only the card toggled.
+ * Which rows are open. Starts with the running ones; a row that starts
+ * running later opens once, as it starts; `#s{id}` opens that row and
+ * scrolls to it. Toggling changes only the row toggled.
  */
 function useOpenCards(view: RailView): { ids: ReadonlySet<string>; toggle: (id: string) => void } {
   const [ids, setIds] = useState<ReadonlySet<string>>(() => new Set(runningIds(view)));
@@ -202,7 +281,7 @@ function useOpenCards(view: RailView): { ids: ReadonlySet<string>; toggle: (id: 
     const id = sprintIdFromHash(location.hash);
     if (id === null) return;
     setIds((prev) => (prev.has(id) ? prev : new Set([...prev, id])));
-    // Scroll once the card has opened (the next frame, after React commits).
+    // Scroll once the row has opened (the next frame, after React commits).
     const frame = window.requestAnimationFrame(() => {
       document.getElementById(paths.sprintSection(id))?.scrollIntoView({ block: 'start' });
     });
@@ -232,56 +311,6 @@ function sprintIdFromHash(hash: string): string | null {
   } catch {
     return null;
   }
-}
-
-/** The wave column cell: name (and state icon), mode, duration, retries. Dashed groups show the name only. */
-function WaveCell({ row }: { row: RailRow }) {
-  if (row.kind !== 'wave') {
-    return (
-      <div className="wave-cell dashed">
-        <div className="wave-cell-head">
-          <span className="wave-name" data-testid="wave-name">
-            {row.label}
-          </span>
-        </div>
-      </div>
-    );
-  }
-  const unlogged = row.durationText === 'start not logged';
-  return (
-    <div className={`wave-cell ${row.state ?? ''}`}>
-      <div className="wave-cell-head">
-        <span className="wave-name" data-testid="wave-name">
-          {row.label}
-        </span>
-        {row.state === 'done' && <StatusIcon kind="pass" />}
-        {row.state === 'running' && <StatusIcon kind="run" />}
-        <span className="visually-hidden">{row.state === 'done' ? ', done' : ', running'}</span>
-      </div>
-      <span className="wave-sep" aria-hidden="true">
-        ·
-      </span>
-      <span className={row.parallel ? 'mode par' : 'mode'} data-testid="wave-mode">
-        {row.parallel ? '∥ Parallel' : 'Sequential'}
-      </span>
-      <span className="wave-sep" aria-hidden="true">
-        ·
-      </span>
-      <span className={unlogged ? 'wave-dur unlogged' : 'wave-dur'} data-testid="wave-duration">
-        {row.durationText}
-      </span>
-      {row.retries > 0 && (
-        <>
-          <span className="wave-sep" aria-hidden="true">
-            ·
-          </span>
-          <span className="wave-retries" data-testid="wave-retries">
-            {plural(row.retries, 'retry', 'retries')}
-          </span>
-        </>
-      )}
-    </div>
-  );
 }
 
 /** Needs-you banner for a gate that hit its retry limit. It goes once a later event for the sprint is logged. */

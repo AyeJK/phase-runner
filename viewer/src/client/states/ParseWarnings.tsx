@@ -5,9 +5,9 @@
  * the two sanctioned in-page toggles) that reveals the file's path and each
  * warning's line number and raw text, with the reason under it.
  *
- * Views pass the files they show: the rail shows its phase's plan and run
- * log; the kanban shows files no phase owns (the columns carry a "N
- * warnings" tag instead). The rest of the view renders as usual underneath.
+ * Views pass the files they show: a phase page shows its phase's plan and
+ * run log, then every file no phase owns (`pageWarningFiles`). The rest of
+ * the view renders as usual underneath.
  *
  * Test hooks: `[data-testid=parse-warnings]` (with `data-file`, the project
  * path), `parse-warnings-toggle`, `parse-warnings-details`, `parse-warning`

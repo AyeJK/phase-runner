@@ -47,11 +47,19 @@ code {
   border-radius: 3px;
 }
 
-/* Label: mono 11px/600, uppercase by CSS (source text is sentence case). */
+/*
+ * Labels (design-system.md "Calmer layout", Type changes): sentence case, no
+ * letter spacing. Sans 600 12px for word labels; `.num` is mono 500 12px for a
+ * label that is a number ("Phase 8"). Uppercase letter-spaced text is kept to
+ * status badges and tags.
+ */
 .label {
-  font: 600 11px/1 var(--mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font: 600 12px/1.5 var(--sans);
+  color: var(--text-3);
+}
+.num {
+  font: 500 12px/1.5 var(--mono);
+  font-variant-ligatures: none;
   color: var(--text-3);
 }
 
@@ -204,8 +212,9 @@ code {
   border-radius: var(--r-sm);
 }
 
-/* Sprint id next to a title */
+/* Sprint id next to a title: quiet grey ("Calmer layout", Type changes).
+   `--accent-text` is kept for links, Parallel and warnings. */
 .sid {
-  font: 600 13px var(--mono);
-  color: var(--accent-text);
+  font: 500 13px var(--mono);
+  color: var(--text-3);
 }

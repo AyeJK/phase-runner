@@ -1,6 +1,7 @@
 /**
  * Rail derivation: one phase of a {@link Project} in, what the unified
- * interface's phase rail draws out (design-system.md "Unified interface").
+ * interface's phase page draws out (design-system.md "Unified interface",
+ * "Calmer layout").
  * Pure (no DOM, no React), so unit tests run it in Node against fixtures.
  *
  * It builds on the core's waves, sprint runs and escalations
@@ -30,6 +31,11 @@
  * **Retries** per wave are the extra implementation runs across its sprints
  * (see {@link waveRetries}): a retry counts from its start marker.
  *
+ * **Meta line.** The phase page's header line (see {@link phaseMeta}): the
+ * state word and icon, done of eligible tasks, the wave count with the total
+ * of the wave durations (none when a start isn't logged), retries, and when
+ * the run finished or started.
+ *
  * **Sprint card state**, first match wins:
  *
  * | State | When |
@@ -53,7 +59,7 @@
  * While a failure is being retried, the open card also shows it under the
  * tasks table (see {@link currentFailure}).
  *
- * **Filter groups** for the filter row: `complete` (every eligible task done,
+ * **Phase groups** for phase states and the phase list: `complete` (every eligible task done,
  * and no sprint card in a gate state or Needs you), `future` (no task done,
  * running or blocked, and no run events), otherwise `progress`. A manual task
  * is eligible, so a phase with one left is never `complete`; on its own it is
@@ -76,6 +82,7 @@ import { isStartMarker } from '../../core/derive/run.js';
 import { currentSprintRun, phaseRuns, sprintRan, sprintStatus } from '../data/status.js';
 import { formatTime, GATE_NAMES, plural } from '../format.js';
 import { attemptNotes, attemptTitle, resolutionText, type AttemptResolution } from '../live/derive.js';
+import { phaseBadge } from '../sprint/status.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -244,28 +251,46 @@ export interface RailView {
   retries: number;
   /** "4 waves · 2 retries", or `null` with no run log. */
   summaryText: string | null;
+  /** The phase page's meta line. See {@link PhaseMeta}. */
+  meta: PhaseMeta;
 }
 
-/** A phase's filter group. See the module comment. */
+/**
+ * The phase page's meta line (design-system.md "Calmer layout", Phase page):
+ * "Complete · 55 of 55 tasks · 4 waves, 69 min · No retries · Finished Oct 3,
+ * 5:14 PM". Each field is one item; the page joins them with dots.
+ */
+export interface PhaseMeta {
+  /**
+   * The phase's state word, from its badge (`phaseBadge`): "Complete",
+   * "Running wave 2 of 3", "1 task blocked", "Needs you", or the plain
+   * "Not started" / "Waiting" (and "Deferred" / "Cut").
+   */
+  stateText: string;
+  /** The state's icon and colour; `null` for the plain grey words. */
+  stateIcon: 'pass' | 'run' | 'needs' | 'manual' | null;
+  /** The badge kind the state comes from (`tag` for the plain words). */
+  stateKind: 'pass' | 'run' | 'needs' | 'manual' | 'fail' | 'tag';
+  /** Every eligible task done and nothing running or waiting on you: no status bar. */
+  complete: boolean;
+  done: number;
+  eligible: number;
+  /** "55 of 55 tasks" (done of eligible). */
+  tasksText: string;
+  /** Wave rows on the page (the logged waves). */
+  waves: number;
+  /** Total of the wave durations in whole minutes, or `null` when any wave's start isn't logged (or there are none). */
+  minutes: number | null;
+  /** "4 waves, 69 min", "4 waves" when a duration isn't logged, or "No run log". */
+  wavesText: string;
+  /** "No retries", "1 retry", "2 retries"; `null` with no run log. */
+  retriesText: string | null;
+  /** "Finished Oct 3, 5:14 PM" once the run has ended, "Started 2:40 PM" while it runs (the date only when it isn't today); else `null`. */
+  timeText: string | null;
+}
+
+/** A phase's group. See the module comment. */
 export type PhaseGroup = 'progress' | 'complete' | 'future';
-
-/** One filter of the filter row, in display order. */
-export type PhaseFilter = 'all' | PhaseGroup;
-
-/** Group labels, typed in sentence case: the filters' and the kanban lanes'. */
-export const PHASE_GROUP_LABEL: Record<PhaseGroup, string> = {
-  progress: 'In progress',
-  complete: 'Complete',
-  future: 'Not started',
-};
-
-/** Filter labels in display order. */
-export const PHASE_FILTERS: ReadonlyArray<{ key: PhaseFilter; label: string }> = [
-  { key: 'all', label: 'All' },
-  { key: 'progress', label: PHASE_GROUP_LABEL.progress },
-  { key: 'complete', label: PHASE_GROUP_LABEL.complete },
-  { key: 'future', label: PHASE_GROUP_LABEL.future },
-];
 
 // ---------------------------------------------------------------------------
 // Rail view
@@ -294,7 +319,15 @@ export function railView(project: Project, phase: Phase, now: number = Date.now(
 
   if (!runs) {
     const rows = phase.sprints.length > 0 ? [dashedRow('not-run', [...cards.values()])] : [];
-    return { phase: phase.number, hasRunLog: false, rows, waves: 0, retries: 0, summaryText: null };
+    return {
+      phase: phase.number,
+      hasRunLog: false,
+      rows,
+      waves: 0,
+      retries: 0,
+      summaryText: null,
+      meta: phaseMeta(project, phase, null, rows, now),
+    };
   }
 
   // Each sprint sits in its latest wave.
@@ -340,7 +373,125 @@ export function railView(project: Project, phase: Phase, now: number = Date.now(
     waves: waveRows.length,
     retries,
     summaryText: `${plural(waveRows.length, 'wave')} · ${plural(retries, 'retry', 'retries')}`,
+    meta: phaseMeta(project, phase, runs, rows, now),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Phase meta line
+// ---------------------------------------------------------------------------
+
+/**
+ * The phase page's meta line from the rail rows. See {@link PhaseMeta}.
+ *
+ * - The state is the phase badge's word with its icon; "Running · wave 2 of
+ *   3" reads "Running wave 2 of 3" here.
+ * - Minutes are the wave rows' durations added up (a running wave counts up
+ *   to `now`), rounded once; any wave without a logged start leaves them out.
+ * - The run has ended when every wave row is done and no sprint is in a gate
+ *   or failed state (as {@link runEnd}): "Finished" and the latest wave end.
+ *   Otherwise, with a run log, "Started" and the first event of the latest run.
+ */
+export function phaseMeta(
+  project: Project,
+  phase: Phase,
+  runs: PhaseRuns | null,
+  rows: readonly RailRow[],
+  now: number = Date.now(),
+): PhaseMeta {
+  const badge = phaseBadge(project, phase);
+  const progress = project.progress.byPhase[String(phase.number)];
+  const done = progress?.done ?? 0;
+  const eligible = progress?.eligible ?? 0;
+  const stateIcon = badge.kind === 'tag' || badge.kind === 'fail' ? null : badge.kind;
+  const stateText = badge.kind === 'run' ? badge.text.replace(' · ', ' ') : badge.text;
+  const base = {
+    stateText,
+    stateIcon,
+    stateKind: badge.kind,
+    complete: badge.kind === 'pass',
+    done,
+    eligible,
+    tasksText: `${done} of ${plural(eligible, 'task')}`,
+  };
+  if (!runs) {
+    return { ...base, waves: 0, minutes: null, wavesText: 'No run log', retriesText: null, timeText: null };
+  }
+
+  const waveRows = rows.filter((r) => r.kind === 'wave');
+  const minutes = totalMinutes(waveRows, now);
+  const waves = plural(waveRows.length, 'wave');
+  const retries = waveRows.reduce((n, r) => n + r.retries, 0);
+  const ended =
+    waveRows.length > 0 &&
+    waveRows.every((r) => r.state === 'done') &&
+    !rows.some((r) => r.sprints.some((s) => isActiveState(s.state)));
+
+  let timeText: string | null = null;
+  if (ended) {
+    const end = latest(waveRows.map((r) => r.endedAt));
+    if (end !== null) timeText = `Finished ${formatWhen(end, now)}`;
+  } else if (runs.waves.length > 0) {
+    const run = Math.max(...runs.waves.map((w) => w.run));
+    const start = earliest(runs.waves.filter((w) => w.run === run).map((w) => w.startedAt));
+    if (start !== null) timeText = `Started ${formatWhen(start, now)}`;
+  }
+
+  return {
+    ...base,
+    waves: waveRows.length,
+    minutes,
+    wavesText: minutes === null ? waves : `${waves}, ${minutes === 0 ? 'under 1 min' : `${minutes} min`}`,
+    retriesText: retries === 0 ? 'No retries' : plural(retries, 'retry', 'retries'),
+    timeText,
+  };
+}
+
+/** The wave rows' durations added up, in whole minutes; `null` when any start isn't logged or there are no waves. */
+function totalMinutes(waveRows: readonly RailRow[], now: number): number | null {
+  if (waveRows.length === 0) return null;
+  let ms = 0;
+  for (const r of waveRows) {
+    const start = r.startedAt === null ? NaN : Date.parse(r.startedAt);
+    const end = r.state === 'done' && r.endedAt !== null ? Date.parse(r.endedAt) : now;
+    if (Number.isNaN(start) || Number.isNaN(end)) return null;
+    ms += Math.max(0, end - start);
+  }
+  return Math.round(ms / 60_000);
+}
+
+function latest(values: ReadonlyArray<string | null>): string | null {
+  let best: string | null = null;
+  for (const v of values) if (v !== null && !Number.isNaN(Date.parse(v)) && (best === null || Date.parse(v) > Date.parse(best))) best = v;
+  return best;
+}
+
+function earliest(values: ReadonlyArray<string | null>): string | null {
+  let best: string | null = null;
+  for (const v of values) if (v !== null && !Number.isNaN(Date.parse(v)) && (best === null || Date.parse(v) < Date.parse(best))) best = v;
+  return best;
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * A 12-hour local time, with the date in front when it isn't today: "2:40 PM",
+ * "Oct 3, 5:14 PM", and the year too when it isn't this year ("Oct 3, 2025, 5:14 PM").
+ */
+export function formatWhen(ts: string, now: number = Date.now()): string {
+  const date = new Date(ts);
+  if (Number.isNaN(date.getTime())) return '';
+  const today = new Date(now);
+  const time = formatTime(date);
+  if (
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate()
+  ) {
+    return time;
+  }
+  const day = `${MONTHS[date.getMonth()]} ${date.getDate()}`;
+  return date.getFullYear() === today.getFullYear() ? `${day}, ${time}` : `${day}, ${date.getFullYear()}, ${time}`;
 }
 
 /** A task done, running or blocked: the sprint has been worked on. A manual task alone is not work. */
@@ -721,7 +872,7 @@ export function runNotes(runs: PhaseRuns | null, sprintId: string): RunNote[] {
 }
 
 // ---------------------------------------------------------------------------
-// Filter groups
+// Phase groups
 // ---------------------------------------------------------------------------
 
 /** Card states that keep a phase in progress however many tasks are done: the active ones and Needs you. */
@@ -729,7 +880,7 @@ function isBusy(state: SprintState): boolean {
   return isActiveState(state) || state === 'needs-you' || state === 'manual';
 }
 
-/** Which filter a phase falls under. See the module comment. */
+/** Which group a phase falls under. See the module comment. */
 export function phaseGroup(project: Project, phase: Phase): PhaseGroup {
   const progress = project.progress.byPhase[String(phase.number)];
   const runs = phaseRuns(project, phase.number);
@@ -741,9 +892,9 @@ export function phaseGroup(project: Project, phase: Phase): PhaseGroup {
   return started || busy ? 'progress' : 'future';
 }
 
-/** Phase counts per filter, for the filter row ("All 8 · In progress 1 · Complete 6 · Not started 1"). */
-export function phaseGroupCounts(project: Project): Record<PhaseFilter, number> {
-  const counts: Record<PhaseFilter, number> = { all: project.phases.length, progress: 0, complete: 0, future: 0 };
+/** Phase counts per group, and of all phases (the phase list's "7 of 8 complete"). */
+export function phaseGroupCounts(project: Project): Record<PhaseGroup | 'all', number> {
+  const counts: Record<PhaseGroup | 'all', number> = { all: project.phases.length, progress: 0, complete: 0, future: 0 };
   for (const phase of project.phases) counts[phaseGroup(project, phase)]++;
   return counts;
 }

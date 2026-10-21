@@ -24,7 +24,7 @@ import {
   type RailSprint,
   type RailView,
 } from '../../src/client/rail/derive.js';
-import { kanbanColumn, kanbanLanes } from '../../src/client/board/derive.js';
+import { impliedPhase, phaseRow, phaseRows, runningPhase } from '../../src/client/list/derive.js';
 import { notStartedTasks } from '../../src/client/data/status.js';
 import { phaseBadge, taskIcon } from '../../src/client/sprint/status.js';
 import { RUN_LOGS } from '../fixtures/index.js';
@@ -485,7 +485,7 @@ describe('sprint card states', () => {
     expect(v.rows[0]!.retries).toBe(0);
     expect(runEnd(v)).toBeNull();
     expect(phaseGroup(project, project.phases[0]!)).toBe('progress');
-    expect(kanbanColumn(project, project.phases[0]!).tiles[0]).toMatchObject({ state: 'verify-failed', running: true });
+    expect(phaseRow(project, project.phases[0]!).sprints[0]).toMatchObject({ state: 'verify-failed', running: true });
 
     const retrying = makeProject([{ n: 8, sprints: [['8.1', '--']], log: jsonl([...failed, [3, 1, '8.1', 'implement', 'start', 2]]) }]);
     const r = rail(retrying, 8);
@@ -579,7 +579,7 @@ describe('sprint card states', () => {
       { n: 8, sprints: [['8.1', 'x-M'], ['8.2', '--M'], ['8.3', '~-']], log: jsonl([[0, 1, '8.1', 'implement', 'start', 1]]) },
     ]);
     expect(notStartedTasks(project, project.phases[0]!)).toEqual({ todo: 2, manual: 1 });
-    expect(kanbanColumn(project, project.phases[0]!).notStarted).toEqual({ todo: 2, manual: 1 });
+    expect(phaseRow(project, project.phases[0]!).notStarted).toEqual({ todo: 2, manual: 1 });
   });
 
   it('reads Waiting for a sprint that passed verify while its parallel sibling retries, then Doc syncing once both pass', () => {
@@ -651,8 +651,8 @@ describe('manual tasks', () => {
     expect(card(v, '8.1').state).toBe('manual');
     expect(card(v, '8.1').stateText).toBe('Needs you');
     expect(card(v, '8.2').state).toBe('manual');
-    // The kanban tile follows the card.
-    expect(kanbanColumn(project, project.phases[0]!).tiles.map((t) => t.state)).toEqual(['manual', 'manual']);
+    // The phase row's sprints follow the card.
+    expect(phaseRow(project, project.phases[0]!).sprints.map((t) => t.state)).toEqual(['manual', 'manual']);
     // The phase badge reads Needs you in violet.
     expect(phaseBadge(project, project.phases[0]!)).toEqual({ kind: 'manual', text: 'Needs you' });
   });
@@ -700,7 +700,7 @@ describe('manual tasks', () => {
     const v = rail(project, 8);
     expect(card(v, '8.1').state).toBe('needs-you');
     expect(card(v, '8.1').stateText).toBe('Needs you');
-    expect(kanbanColumn(project, project.phases[0]!).tiles.map((t) => t.state)).toEqual(['needs-you']);
+    expect(phaseRow(project, project.phases[0]!).sprints.map((t) => t.state)).toEqual(['needs-you']);
     expect(phaseBadge(project, project.phases[0]!)).toEqual({ kind: 'needs', text: '1 task blocked' });
   });
 
@@ -751,7 +751,7 @@ describe('manual tasks', () => {
     const v = rail(project, 8);
     expect(card(v, '8.1').state).toBe('not-started');
     expect(card(v, '8.2').state).toBe('not-started');
-    expect(kanbanColumn(project, project.phases[0]!).tiles.map((t) => t.state)).toEqual(['not-started', 'not-started']);
+    expect(phaseRow(project, project.phases[0]!).sprints.map((t) => t.state)).toEqual(['not-started', 'not-started']);
     // Not work: the sprints stay in "Not run yet", not "No run log".
     expect(rows(v)).toEqual([['Not run yet', ['8.1', '8.2']]]);
   });
@@ -799,22 +799,53 @@ describe('filter groups', () => {
     const groups = Object.fromEntries(project.phases.map((p) => [p.number, phaseGroup(project, p)]));
     expect(groups).toEqual({ 2: 'complete', 3: 'progress', 5: 'future', 6: 'progress', 7: 'progress' });
     expect(phaseGroupCounts(project)).toEqual({ all: 5, progress: 3, complete: 1, future: 1 });
-    // The kanban's lanes, left to right: not started, in progress, complete.
-    expect(kanbanLanes(project).map((l) => [l.label, l.columns.map((c) => c.number)])).toEqual([
-      ['Not started', [5]],
-      ['In progress', [3, 6, 7]],
-      ['Complete', [2]],
+    // The list view's phase rows carry the same groups, in phase order, with their counts.
+    expect(phaseRows(project).map((r) => [r.number, r.group, r.countText])).toEqual([
+      [2, 'complete', '28/28 tasks'],
+      [3, 'progress', '1/2 tasks'],
+      [5, 'future', '0/2 tasks'],
+      [6, 'progress', '0/2 tasks'],
+      [7, 'progress', '0/2 tasks'],
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The phase `/` shows
+// ---------------------------------------------------------------------------
+
+describe('impliedPhase', () => {
+  it('is the phase with the most recent run activity when nothing runs', () => {
+    const project = makeProject([
+      { ...PHASE_2, log: fixture(RUN_LOGS.realPhase2Full) },
+      { n: 3, sprints: [['3.1', 'x-']] },
+    ]);
+    expect(runningPhase(project)).toBeNull();
+    expect(impliedPhase(project)).toBe(2);
   });
 
-  it('keeps a lane with no phases, empty', () => {
-    const project = makeProject([{ n: 3, sprints: [['3.1', 'x-']] }]);
-    expect(kanbanLanes(project).map((l) => [l.group, l.columns.length])).toEqual([
-      ['future', 0],
-      ['progress', 1],
-      ['complete', 0],
+  it('is the running phase when a sprint is in a gate state', () => {
+    const project = makeProject([
+      { ...PHASE_2, log: fixture(RUN_LOGS.realPhase2Full) },
+      { n: 3, sprints: [['3.1', '--']], log: jsonl([[0, 1, '3.1', 'implement', 'start', 1]]) },
+      { n: 4, sprints: [['4.1', '--']] },
     ]);
+    expect(runningPhase(project)).toBe(3);
+    expect(impliedPhase(project)).toBe(3);
+    expect(phaseRow(project, project.phases[1]!).running).toBe(true);
   });
+
+  it('is the first phase with work left with no run logs, and null with no phases', () => {
+    const project = makeProject([
+      { n: 1, sprints: [['1.1', 'xx']] },
+      { n: 2, sprints: [['2.1', 'x-']] },
+    ]);
+    expect(impliedPhase(project)).toBe(2);
+    expect(impliedPhase(makeProject([]))).toBeNull();
+  });
+});
+
+describe('phase groups', () => {
 
   it('keeps a complete phase with a sprint implementing again in progress', () => {
     const project = makeProject([
@@ -861,5 +892,104 @@ describe('implement start lines', () => {
       const derived = deriveRun(events);
       expect(derived.waves.flatMap((w) => w.events)).toEqual(events);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase meta line (Sprint 9.3)
+// ---------------------------------------------------------------------------
+
+describe('phase meta line', () => {
+  /** Long after the real logs, so their dates show. */
+  const LATER = Date.parse('2026-10-21T12:00:00Z');
+
+  it('the real Phase 2 log: complete, 4 waves with no total (wave 1 start not logged), finished', () => {
+    const project = makeProject([{ ...PHASE_2, log: fixture(RUN_LOGS.realPhase2Full) }]);
+    const v = rail(project, 2, LATER);
+    const end = v.rows[3]!.endedAt!;
+    expect(v.meta).toMatchObject({
+      stateText: 'Complete',
+      stateIcon: 'pass',
+      complete: true,
+      tasksText: '28 of 28 tasks',
+      waves: 4,
+      minutes: null,
+      wavesText: '4 waves',
+      retriesText: 'No retries',
+    });
+    expect(v.meta.timeText).toMatch(/^Finished Sep (28|29), /);
+    expect(v.meta.timeText!.endsWith(formatTime(end))).toBe(true);
+  });
+
+  it('the real Phase 4 log: 3 waves and 2 retries', () => {
+    const project = makeProject([{ ...PHASE_4, log: fixture(RUN_LOGS.realPhase4) }]);
+    const v = rail(project, 4, LATER);
+    expect(v.meta).toMatchObject({
+      stateText: 'Complete',
+      stateIcon: 'pass',
+      complete: true,
+      tasksText: '19 of 19 tasks',
+      wavesText: '3 waves',
+      retriesText: '2 retries',
+    });
+    expect(v.meta.timeText).toMatch(/^Finished /);
+  });
+
+  it('logged starts: the total of the wave durations; a running phase says when it started', () => {
+    const log = jsonl([
+      [0, 1, '6.1', 'implement', 'start', 1],
+      [5, 1, '6.1', 'implement', 'pass', 1],
+      [7, 1, '6.1', 'verify', 'pass', 1],
+      [9, 1, '6.1', 'doc_sync', 'pass', 1],
+      [10, 2, '6.2', 'implement', 'start', 1],
+    ]);
+    const running = makeProject([{ n: 6, sprints: [['6.1', 'xx'], ['6.2', '--']], log }]);
+    const v = rail(running, 6, at(30));
+    expect(v.meta.stateIcon).toBe('run');
+    expect(v.meta.stateText).toMatch(/^Running wave \d+ of \d+$/);
+    expect(v.meta.complete).toBe(false);
+    expect(v.meta.tasksText).toBe('2 of 4 tasks');
+    // 9 min for wave 1, 20 so far for wave 2.
+    expect(v.meta.wavesText).toBe('2 waves, 29 min');
+    expect(v.meta.retriesText).toBe('No retries');
+    expect(v.meta.timeText).toBe(`Started ${formatTime(at(0))}`);
+
+    const finished = makeProject([
+      {
+        n: 6,
+        sprints: [['6.1', 'xx'], ['6.2', 'xx']],
+        log: `${log}${jsonl([
+          [20, 2, '6.2', 'implement', 'pass', 1],
+          [22, 2, '6.2', 'verify', 'fail', 1],
+          [23, 2, '6.2', 'implement', 'start', 2],
+          [25, 2, '6.2', 'implement', 'pass', 2],
+          [27, 2, '6.2', 'verify', 'pass', 2],
+          [28, 2, '6.2', 'doc_sync', 'pass', 1],
+        ])}`,
+      },
+    ]);
+    const done = rail(finished, 6, at(60));
+    expect(done.meta).toMatchObject({
+      stateText: 'Complete',
+      complete: true,
+      tasksText: '4 of 4 tasks',
+      minutes: 27,
+      wavesText: '2 waves, 27 min',
+      retriesText: '1 retry',
+      timeText: `Finished ${formatTime(at(28))}`,
+    });
+  });
+
+  it('no run log: "No run log", no retries or time', () => {
+    const project = makeProject([{ n: 7, sprints: [['7.1', '--']] }]);
+    expect(rail(project, 7).meta).toMatchObject({
+      stateText: 'Not started',
+      stateIcon: null,
+      complete: false,
+      tasksText: '0 of 2 tasks',
+      wavesText: 'No run log',
+      retriesText: null,
+      timeText: null,
+    });
   });
 });

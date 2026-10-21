@@ -15,9 +15,9 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 8px;
+  padding: 4px 7px;
   font: 600 11px/1 var(--mono);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
   border: 1px solid;
@@ -227,9 +227,7 @@
 }
 .md .md-h {
   margin-top: 4px;
-  font: 600 11px/1 var(--mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font: 600 12px/1.5 var(--sans);
   color: var(--text-3);
 }
 .md-pre {

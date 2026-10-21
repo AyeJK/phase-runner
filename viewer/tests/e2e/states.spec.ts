@@ -9,14 +9,14 @@
  *   `docs/phases/`, it lists both, each with its `npx phase-viewer --dir`
  *   command as plain text, and picks neither.
  * - Parse warnings: on a copy of the `broken` fixture, the warnings banner
- *   shows at the top of the phase's rail (list view and slide-in panel) and
- *   as a tag on its kanban card; Show details reveals the file, each line
- *   number and its raw text; every other sprint still renders.
+ *   shows at the top of the phase's rail; Show details reveals the file,
+ *   each line number and its raw text; every other sprint still renders.
  * - Not found: `/sprint/9.9`, `/phase/99` and an unknown address show the
  *   not-found block with a link back to the phases, inside the shell.
  *
  * Updated in Sprint 7.3 for the unified shell (Overview, Sprint detail and
- * the phase sidebar are gone).
+ * the phase sidebar are gone), and in Sprint 9.1 for the one layout (the
+ * kanban and its slide-in panel are gone).
  *
  * Each group starts a dev loop of its own (the viewer server plus Vite with
  * `/api` proxied to it), as `harness.ts` does for `trail-log`.
@@ -189,8 +189,10 @@ test.describe('no phase plans', () => {
     await open(page, `${loop.baseURL}/`);
     const empty = page.getByTestId('no-phase-plans');
     await expect(empty).toBeVisible();
-    // A first visit's `/` goes to the list view's route, which shows the empty state instead.
-    await expect(page).toHaveURL(`${loop.baseURL}/list`);
+    // `/` is the list view's route, which shows the empty state instead.
+    await expect(page).toHaveURL(`${loop.baseURL}/`);
+    // No project, so no project name in the top bar.
+    await expect(page.getByTestId('project-name')).toHaveCount(0);
 
     await expect(empty.locator('svg.wm-lg')).toHaveAttribute('aria-label', 'Phase Runner');
     await expect(empty.locator('h3')).toHaveText('No phase plans found');
@@ -202,10 +204,9 @@ test.describe('no phase plans', () => {
     await expect(searched.locator('[data-level="up"] dd')).toHaveText(path.resolve(base));
     await expect(searched.locator('[data-level="down"] code')).toHaveText(['notes', 'src']);
 
-    // No buttons, no list view or kanban, no error.
+    // No buttons, no list view, no error.
     await expect(page.locator('main button')).toHaveCount(0);
     await expect(page.getByTestId('list-view')).toHaveCount(0);
-    await expect(page.getByTestId('kanban')).toHaveCount(0);
     await expect(page.getByTestId('not-found')).toHaveCount(0);
   });
 
@@ -270,7 +271,8 @@ test.describe('several candidates', () => {
 
     // Plain text, never buttons; nothing chosen.
     await expect(page.locator('main button')).toHaveCount(0);
-    await expect(page.getByTestId('kanban')).toHaveCount(0);
+    await expect(page.getByTestId('list-view')).toHaveCount(0);
+    await expect(page.getByTestId('project-name')).toHaveCount(0);
     const health = await page.request.get(`${loop.baseURL}/api/health`);
     expect(((await health.json()) as { root: string | null }).root).toBeNull();
   });
@@ -323,8 +325,8 @@ test.describe('broken fixture', () => {
     expect(project.warnings.length).toBeGreaterThan(0);
     const lines = warnedLines();
 
-    // Since Sprint 7.3 the banner sits at the top of the phase's rail (list view here, or the panel).
-    await open(page, `${loop.baseURL}/list?phase=1`);
+    // The banner sits at the top of the phase's rail.
+    await open(page, `${loop.baseURL}/phase/1`);
     await expect(page.getByTestId('phase-rail')).toBeVisible();
 
     const banner = page.getByTestId('parse-warnings');
@@ -359,15 +361,6 @@ test.describe('broken fixture', () => {
     // And back.
     await toggle.click();
     await expect(details).toBeHidden();
-
-    // Switched to the kanban, the phase stays open in the panel, which shows the banner too.
-    await page.getByRole('group', { name: 'Layout' }).getByRole('button', { name: 'Kanban' }).click();
-    await expect(page.getByTestId('slide-panel').getByTestId('parse-warnings')).toHaveCount(1);
-    // Behind it, the kanban card still renders, with its warnings tag.
-    await page.keyboard.press('Escape');
-    const column = page.locator('a[data-kan-col="1"]');
-    await expect(column).toBeVisible();
-    await expect(column.locator('[data-tag="warnings"]')).toHaveText(`${project.warnings.length} warnings`);
   });
 
   test('every other sprint still renders', async ({ page }) => {
@@ -376,15 +369,13 @@ test.describe('broken fixture', () => {
     // The sprint with no N.M id is the only one that can't be addressed.
     expect(ids).toEqual(['1.1', '1.3', '1.4']);
 
-    // `/phase/1` opens the phase's panel (Sprint 7.3): the rail, one sprint card per sprint.
+    // `/phase/1`: the rail, one sprint card per sprint.
     await open(page, `${loop.baseURL}/phase/1`);
-    const panel = page.getByTestId('slide-panel');
+    const panel = page.getByTestId('list-main');
     await expect(panel.getByTestId('phase-rail')).toBeVisible();
     await expect(panel.getByTestId('parse-warnings')).toHaveCount(1);
     await expect(panel.locator('article[data-sprint-card]')).toHaveCount(ids.length);
     for (const id of ids) await expect(panel.locator(`article[data-sprint-card="${id}"]`)).toBeVisible();
-    // And one kanban tile per sprint.
-    await expect(page.locator('a[data-kan-col="1"] li[data-tile]')).toHaveCount(ids.length);
 
     // Each sprint's card opens to its tasks (Sprint detail's tasks table moved onto the card).
     for (const sprint of phase.sprints) {
@@ -395,8 +386,8 @@ test.describe('broken fixture', () => {
   });
 
   test('an unknown sprint or phase shows not found with a link back to the phases', async ({ page }) => {
-    // Since Sprint 7.3 an unknown sprint lands on its phase's panel (`/sprint/9.9` → `/?phase=9#s9.9`),
-    // and an unknown phase shows not found in the panel, with the kanban behind it.
+    // An unknown sprint lands on its phase (`/sprint/9.9` → `/phase/9#s9.9`), and an unknown
+    // phase shows not found where its rail would be, with the phase list beside it.
     const cases = [
       { route: '/sprint/9.9', kind: 'phase', title: 'Phase 9 not found' },
       { route: '/phase/99', kind: 'phase', title: 'Phase 99 not found' },
@@ -409,7 +400,7 @@ test.describe('broken fixture', () => {
       await expect(block.locator('h3')).toHaveText(c.title);
       // The shell stays.
       await expect(page.locator('.app-head')).toBeVisible();
-      await expect(page.getByTestId('filter-row')).toBeVisible();
+      await expect(page.getByTestId('project-name')).toBeVisible();
 
       const link = block.getByTestId('not-found-overview');
       await expect(link).toHaveText('Back to phases');
@@ -417,8 +408,8 @@ test.describe('broken fixture', () => {
       await markWindow(page);
       await link.click();
       await expect(page).toHaveURL(`${loop.baseURL}/`);
-      await expect(page.getByTestId('kanban')).toBeVisible();
-      await expect(page.getByTestId('slide-panel')).toHaveCount(0);
+      await expect(page.getByTestId('list-main').getByTestId('phase-rail')).toBeVisible();
+      await expect(page.getByTestId('not-found')).toHaveCount(0);
       expect(await windowMarker(page)).toBe('still here');
     }
   });
@@ -427,7 +418,7 @@ test.describe('broken fixture', () => {
     test.use({ viewport: { width: 375, height: 812 } });
 
     test('no horizontal page scroll with details open, or on not found', async ({ page }) => {
-      await open(page, `${loop.baseURL}/list?phase=1`);
+      await open(page, `${loop.baseURL}/phase/1`);
       await page.getByTestId('parse-warnings-toggle').click();
       await expect(page.getByTestId('parse-warnings-details')).toBeVisible();
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);

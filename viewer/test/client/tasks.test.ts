@@ -4,8 +4,8 @@
  * reads Running after its `task` `start` line and Built after its `pass`
  * line, until the sprint's doc sync is logged. The sprint card's status bar
  * counts the same rows (`liveTaskCounts`). Nothing else reads the `task`
- * lines: task counts, the progress behind every bar, card states, the kanban
- * tile, the phase badge, wave retries and durations stay as they are without
+ * lines: task counts, the progress behind every bar, card states, the phase
+ * row's sprint states, the phase badge, wave retries and durations stay as they are without
  * them.
  */
 import { describe, expect, it } from 'vitest';
@@ -15,7 +15,7 @@ import { sprintTaskNumbers, uiSprintIds } from '../../src/core/load.js';
 import type { Phase, PhaseRuns, Project, Sprint } from '../../src/core/model.js';
 import { parsePhaseFile } from '../../src/core/parser/phase.js';
 import { readRunLog } from '../../src/core/runlog/read.js';
-import { kanbanColumn } from '../../src/client/board/derive.js';
+import { phaseRow } from '../../src/client/list/derive.js';
 import { currentSprintRun, phaseRuns } from '../../src/client/data/status.js';
 import { railView, type RailSprint, type RailView } from '../../src/client/rail/derive.js';
 import { liveTaskCounts, liveTaskStates, phaseBadge, taskRow } from '../../src/client/sprint/status.js';
@@ -119,7 +119,7 @@ function outside(project: Project): unknown {
   return {
     progress: project.progress,
     badge: phaseBadge(project, phase),
-    tiles: kanbanColumn(project, phase).tiles.map((t) => [t.id, t.state]),
+    tiles: phaseRow(project, phase).sprints.map((t) => [t.id, t.state]),
     summary: v.summaryText,
     rows: v.rows.map((r) => ({
       key: r.key,

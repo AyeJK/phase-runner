@@ -143,7 +143,7 @@ export function lastEventAt(runs: PhaseRuns): number | null {
 
 /**
  * The phase the list view selects when none is named (after a running
- * phase, `board/derive.ts`): the phase with the most recent run activity,
+ * phase, `list/derive.ts`): the phase with the most recent run activity,
  * else the first phase with work left, else the first phase. `null` when
  * there are no phases.
  */

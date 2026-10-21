@@ -19,13 +19,13 @@
   --text-2: #b3ada4;
   --text-3: #8a837a;
 
-  /* Accent (ids, the active filter, the selected phase, focus). Never a status. */
+  /* Accent (links, the selected phase, focus). Never a status. */
   --accent: #ffb000;
   --accent-text: #ffc233;
   --accent-bg: rgba(255, 176, 0, 0.1);
   --warn-bg: rgba(255, 176, 0, 0.08);
   --wordmark: #ffe2a3;
-  --wordmark-glow: drop-shadow(0 0 3px rgba(255, 176, 0, 0.75)) drop-shadow(0 0 10px rgba(255, 120, 0, 0.35));
+  --wordmark-glow: none;
 
   /* Status: colour is state */
   --passed: #4cd480;
@@ -43,7 +43,7 @@
   /* Sprint cards inside a wave sit on --bg in dark, --surface in light. */
   --card: var(--bg);
 
-  /* The layer behind the slide-in panel. */
+  /* The layer behind the phone phase switcher's sheet. */
   --scrim: rgba(0, 0, 0, 0.5);
 }
 
@@ -57,10 +57,17 @@
   --border-strong: #cfc8bc;
   --text: #1f1c18;
   --text-2: #544d44;
-  --text-3: #756d63;
+  /*
+   * Light text-3, accent-text and running are a shade darker than the first
+   * design pass (#756d63, #9a6200, #0e7490) so text stays at 4.5:1 or more on
+   * the --surface-2 hover and selected fills and on the tints over them
+   * (Sprint 9.4): grey ids and counts on a selected or hovered row, a Waiting
+   * badge and a Running badge on a hovered sprint row.
+   */
+  --text-3: #6e665c;
 
   --accent: #ffb000;
-  --accent-text: #9a6200;
+  --accent-text: #905c00;
   --accent-bg: rgba(255, 176, 0, 0.14);
   --warn-bg: rgba(255, 176, 0, 0.12);
   --wordmark: #a86a00;
@@ -68,7 +75,7 @@
 
   --passed: #15803d;
   --passed-bg: rgba(21, 128, 61, 0.08);
-  --running: #0e7490;
+  --running: #0d6f8a;
   --running-bg: rgba(14, 116, 144, 0.06);
   --failed: #b91c1c;
   --failed-bg: rgba(185, 28, 28, 0.06);
@@ -88,22 +95,28 @@
   --mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
 
   /* Radii */
-  --r: 6px; /* buttons, sprint cards, sprint tiles, phase list rows, chevron */
-  --r-lg: 10px; /* kanban cards, wave cells, empty state */
+  --r: 6px; /* buttons, sprint cards, phase list rows, chevron */
+  --r-lg: 10px; /* sprint lists, wave cells, empty state */
   --r-banner: 8px;
   --r-sm: 4px; /* stage chips, badges, tags, mode label, code */
 
-  /* Layout */
-  --head: 56px; /* top bar, and the rail's heading bar */
-  --filter: 48px; /* filter row */
-  --panel: 1000px; /* slide-in panel width (never wider than the viewport) */
-  --list: 320px; /* list view phase column */
-  --kan-col-min: 240px; /* narrowest kanban lane; the board scrolls sideways below this */
-  --wave-col: 180px; /* the rail's wave column */
-
-  /* Motion: the slide-in panel and its scrim (none under reduced motion). */
-  --slide: 280ms;
+  /* Layout (design-system.md "Calmer layout", Tokens and breakpoints) */
+  --head: 56px; /* top bar (52px below 720px), and the rail's heading bar */
+  --side: 264px; /* phase sidebar (232px from 720 to 1099px) */
+  --content: 880px; /* max width of the phase page, centred in the main area */
 
   /* The amber "remaining" tint on a Waiting card (same mix as `tr.remaining`, on the card fill). */
   --remaining-bg: color-mix(in srgb, var(--accent) 11%, var(--card));
+}
+
+@media (min-width: 720px) and (max-width: 1099px) {
+  :root {
+    --side: 232px;
+  }
+}
+
+@media (max-width: 719px) {
+  :root {
+    --head: 52px;
+  }
 }

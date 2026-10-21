@@ -1,13 +1,13 @@
 /**
- * The phase rail (Sprint 7.2), opened in the list view at `/list?phase=N`
- * since Sprint 7.3 (`/phase/:n` now redirects to the kanban's slide-in
- * panel; `board.spec.ts` covers the panel): wave rows beside sprint cards,
- * cards that open to their tasks and collapsed rows, Run notes, and card
- * badges that follow a run as it happens.
+ * The phase page (Sprint 7.2's rail, made calmer in Sprint 9.3), opened at
+ * `/phase/N` (or `/list?phase=N`, which redirects there since Sprint 9.1):
+ * the header's meta line, waves as heading lines over one list of sprint
+ * rows, rows that open in place to their tasks and collapsed rows, Run
+ * notes, and row badges and edges that follow a run as it happens.
  *
  * - The `multi-phase` fixture (as-is timestamps, so durations are fixed):
- *   phase 1 has two logged waves (the second 18 min with one retry), phase 2
- *   has one running wave and two sprints that haven't run.
+ *   phase 1 is complete, with two logged waves (the second 18 min with one
+ *   retry), phase 2 has one running wave and two sprints that haven't run.
  * - A `trail-log` copy with the `simulate-run` retry script appended step by
  *   step (`writeStep`), after an `implement` `start` marker, checking each
  *   badge within {@link APPEAR_MS} of its event being appended. Between the
@@ -17,7 +17,7 @@
  * - A `trail-log` copy with one task of a finished sprint set back to not
  *   started: the amber Waiting card.
  * - A `trail-log` copy with the `escalation` script appended: the escalation
- *   banner at the top of the rail, cleared by a later event (Live run's
+ *   banner under the meta line, cleared by a later event (Live run's
  *   check, moved here in Sprint 7.4).
  * - 375 px on the shared `webServer`.
  *
@@ -36,6 +36,15 @@ const APPEAR_MS = 2_000;
 /** The part of `document` the scroll check reads (this file is type-checked without the DOM lib). */
 interface PageDocument {
   document: { documentElement: { scrollWidth: number; clientWidth: number } };
+}
+
+/** A computed style property of the first match (this file is type-checked without the DOM lib). */
+async function css(target: Locator, property: string): Promise<string> {
+  return target.evaluate(
+    (el, prop) =>
+      (globalThis as unknown as { getComputedStyle(el: unknown): Record<string, string> }).getComputedStyle(el)[prop]!,
+    property,
+  );
 }
 
 /** How far the page scrolls sideways (0 or less means no horizontal scroll). */
@@ -90,49 +99,64 @@ test.describe('multi-phase fixture', () => {
     await loop?.close();
   });
 
-  test('phase 2 shows its wave and every sprint once, in plan order', async ({ page }) => {
-    await open(page, `${loop.baseURL}/list?phase=2`);
+  test('phase 2 shows its meta line, its wave and every sprint once, in plan order', async ({ page }) => {
+    await open(page, `${loop.baseURL}/phase/2`);
     await expect(page.getByTestId('phase-rail')).toHaveAttribute('data-phase', '2');
 
-    // Heading bar: "Phase 2: Library UI", the task count and the phase badge.
+    // Header: the eyebrow and title, then the meta line.
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Phase 2: Library UI');
-    await expect(page.getByTestId('phase-progress-text')).toHaveText('1/8 tasks');
+    await expect(page.locator('h1 .eyebrow')).toBeVisible();
+    await expect(page.locator('h1 .page-name')).toHaveText('Library UI');
+    const meta = page.getByTestId('phase-meta');
     await expect(page.getByTestId('phase-status')).toHaveText('1 task blocked');
+    await expect(page.getByTestId('phase-status').locator('svg.i.needs')).toHaveCount(1);
+    await expect(page.getByTestId('phase-progress-text')).toHaveText('1 of 8 tasks');
+    // Wave 1's start isn't logged, so no total minutes.
+    await expect(page.getByTestId('rail-summary')).toHaveText('1 wave');
+    await expect(page.getByTestId('rail-retries')).toHaveText('No retries');
+    await expect(page.getByTestId('phase-time')).toHaveText(/^Started (\w{3} \d{1,2}, )?\d{1,2}:\d{2} [AP]M$/);
+    await expect(meta).toHaveText(/^1 task blocked·1 of 8 tasks·1 wave·No retries·Started /);
+    // Not complete: the status bar shows, under the meta line.
     await expect(page.getByTestId('phase-status-bar')).toHaveClass(/started/);
-
-    // Sprints line: the summary only (no last-event time).
-    await expect(page.getByTestId('rail-summary')).toHaveText('1 wave · 0 retries');
+    // No "Sprints" line and no last-event time.
+    await expect(page.locator('.rail-meta, h2.rail-h')).toHaveCount(0);
     await expect(page.getByText(/last event/)).toHaveCount(0);
 
-    // Rows: the logged wave, then the sprints that haven't run.
+    // Waves: the logged wave, then the sprints that haven't run.
     expect(await attrs(page.locator('section[data-rail-row]'), 'data-rail-row')).toEqual(['wave-1-1', 'not-run']);
     expect(await attrs(page.locator('article[data-sprint-card]'), 'data-sprint-card')).toEqual(['2.1', '2.2', '2.3']);
 
     const wave = railRow(page, 'wave-1-1');
     await expect(wave).toHaveAttribute('aria-label', 'Wave 1');
     await expect(wave).toHaveAttribute('data-row-state', 'running');
+    await expect(wave.locator('.wave-h')).toHaveText('Wave 1·Running·Sequential·start not logged');
     await expect(wave.getByTestId('wave-name')).toHaveText('Wave 1');
+    await expect(wave.getByTestId('wave-live').locator('svg.i.run')).toHaveCount(1);
     await expect(wave.getByTestId('wave-mode')).toHaveText('Sequential');
     await expect(wave.getByTestId('wave-duration')).toHaveText('start not logged');
-    await expect(wave.locator('.wave-cell')).toHaveClass(/running/);
-    await expect(wave.locator('.wave-cell svg.i.run')).toHaveCount(1);
 
     const notRun = railRow(page, 'not-run');
-    await expect(notRun.getByTestId('wave-name')).toHaveText('Not run yet');
-    await expect(notRun.locator('.wave-cell')).toHaveClass(/dashed/);
+    await expect(notRun.locator('.wave-h')).toHaveText('Not run yet');
     await expect(notRun.getByTestId('wave-mode')).toHaveCount(0);
     await expect(notRun.getByTestId('wave-duration')).toHaveCount(0);
+    await expect(notRun.locator('ul.sprints')).toHaveClass(/dashed/);
+    expect(await css(notRun.locator('ul.sprints'), 'borderTopStyle')).toBe('dashed');
     await expect(card(page, '2.2')).toHaveClass(/dashed/);
 
-    // Badges: a blocked task reads Needs you (pink); nothing done reads the plain Not started tag.
+    // Badges: a blocked task reads Needs you (pink, with the pink edge); nothing done reads the plain tag.
     await expect(badge(page, '2.1')).toHaveText('Needs you');
     await expect(badge(page, '2.1')).toHaveClass(/status needs/);
     await expect(card(page, '2.1')).toHaveClass(/needs/);
+    expect(await css(card(page, '2.1'), 'boxShadow')).toContain('inset');
     await expect(badge(page, '2.2')).toHaveText('Not started');
     await expect(badge(page, '2.2')).toHaveClass(/^tag$/);
+    expect(await css(card(page, '2.2'), 'boxShadow')).toBe('none');
+    // The id without "Sprint" on screen; screen readers still hear it.
     await expect(card(page, '2.1').locator('.card-toggle .sid')).toHaveText('Sprint 2.1');
+    await expect(card(page, '2.1').locator('.card-toggle .sid .visually-hidden')).toHaveText('Sprint');
+    await expect(card(page, '2.1').getByTestId('card-toggle')).toHaveAccessibleName(/^Sprint 2\.1 /);
 
-    // Nothing is running, so every card starts collapsed, status bar showing.
+    // Nothing is running, so every row starts collapsed, status bar showing.
     for (const id of ['2.1', '2.2', '2.3']) {
       await expect(card(page, id)).toHaveAttribute('data-open', 'false');
       await expect(card(page, id).getByTestId('card-body')).toBeHidden();
@@ -140,40 +164,70 @@ test.describe('multi-phase fixture', () => {
     }
   });
 
-  test('phase 1: wave rows with durations, retries and a check when done', async ({ page }) => {
-    await open(page, `${loop.baseURL}/list?phase=1`);
-    await expect(page.getByTestId('rail-summary')).toHaveText('2 waves · 1 retry');
+  test('phase 1, complete: a quiet meta line, no status bar or green banner, a check per sprint', async ({ page }) => {
+    await open(page, `${loop.baseURL}/phase/1`);
+    await expect(page.getByTestId('phase-status')).toHaveText('Complete');
+    await expect(page.getByTestId('phase-status').locator('svg.i.pass')).toHaveCount(1);
+    await expect(page.getByTestId('phase-progress-text')).toHaveText('6 of 6 tasks');
+    await expect(page.getByTestId('rail-summary')).toHaveText('2 waves');
+    await expect(page.getByTestId('rail-retries')).toHaveText('1 retry');
+    await expect(page.getByTestId('phase-time')).toHaveText(/^Finished \w{3} \d{1,2}, \d{1,2}:\d{2} [AP]M$/);
+    await expect(page.getByTestId('phase-meta')).toHaveText(/^Complete·6 of 6 tasks·2 waves·1 retry·Finished /);
+    await expect(page.getByTestId('phase-status-bar')).toHaveCount(0);
+    await expect(page.getByTestId('run-end')).toHaveCount(0);
+    await expect(page.getByText('Phase run complete')).toHaveCount(0);
     expect(await attrs(page.locator('section[data-rail-row]'), 'data-rail-row')).toEqual(['wave-1-1', 'wave-1-2']);
 
+    // Wave heading lines: no done check.
     const w1 = railRow(page, 'wave-1-1');
     await expect(w1).toHaveAttribute('data-row-state', 'done');
-    await expect(w1.locator('.wave-cell')).toHaveClass(/done/);
-    await expect(w1.locator('.wave-cell svg.i.pass')).toHaveCount(1);
+    await expect(w1.locator('.wave-h svg')).toHaveCount(0);
+    await expect(w1.getByTestId('wave-live')).toHaveCount(0);
     await expect(w1.getByTestId('wave-duration')).toHaveText('start not logged');
     await expect(w1.getByTestId('wave-retries')).toHaveCount(0);
 
     // Wave 2 starts at wave 1's doc sync (9:03:30) and ends at its own (9:21:05).
     const w2 = railRow(page, 'wave-1-2');
-    await expect(w2.getByTestId('wave-mode')).toHaveText('Sequential');
-    await expect(w2.getByTestId('wave-duration')).toHaveText('18 min');
+    await expect(w2.locator('.wave-h')).toHaveText('Wave 2·Sequential·18 min·1 retry');
     await expect(w2.getByTestId('wave-retries')).toHaveText('1 retry');
 
-    await expect(badge(page, '1.1')).toHaveText('Complete');
-    await expect(badge(page, '1.1')).toHaveClass(/status pass/);
+    // A complete sprint: the green check alone, no Complete badge, no bar, no edge.
+    for (const id of ['1.1', '1.2']) {
+      const end = badge(page, id);
+      await expect(end).toHaveText('Complete');
+      await expect(end).toHaveClass('row-done');
+      await expect(end.locator('svg.i.pass')).toBeVisible();
+      await expect(end.locator('.visually-hidden')).toHaveText('Complete');
+      await expect(card(page, id).locator('.status')).toHaveCount(0);
+      await expect(card(page, id).getByTestId('card-status-bar')).toHaveCount(0);
+      expect(await css(card(page, id), 'boxShadow')).toBe('none');
+    }
   });
 
-  test('wave cells line up with their cards at 1280 px', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 900 });
-    await open(page, `${loop.baseURL}/list?phase=2`);
+  test('each wave is a heading line over one bordered list, on a page no wider than 880 px', async ({ page }) => {
+    await page.setViewportSize({ width: 1536, height: 900 });
+    await open(page, `${loop.baseURL}/phase/2`);
+    await expect(page.locator('.wave-cell, .rail-cards, .rail-card')).toHaveCount(0);
     for (const key of ['wave-1-1', 'not-run']) {
-      const cell = await railRow(page, key).locator('.wave-cell').boundingBox();
-      const cards = await railRow(page, key).locator('.rail-cards').boundingBox();
-      expect(cell && cards).toBeTruthy();
-      // Side by side, top-aligned, the cell spanning its cards.
-      expect(cell!.x + cell!.width).toBeLessThan(cards!.x);
-      expect(Math.abs(cell!.y - cards!.y)).toBeLessThan(1);
-      expect(cell!.height).toBeGreaterThanOrEqual(cards!.height - 1);
+      const section = railRow(page, key);
+      await expect(section.locator('ul.sprints')).toHaveCount(1);
+      // One list holds every row of the wave; each row is a list item.
+      await expect(section.locator('ul.sprints > li > article[data-sprint-card]')).toHaveCount(
+        await section.locator('article[data-sprint-card]').count(),
+      );
+      const heading = await section.locator('.wave-h').boundingBox();
+      const list = await section.locator('ul.sprints').boundingBox();
+      expect(heading && list).toBeTruthy();
+      expect(list!.y).toBeGreaterThanOrEqual(heading!.y + heading!.height);
+      expect(await css(section.locator('ul.sprints'), 'borderTopWidth')).toBe('1px');
     }
+    const pageBox = await page.getByTestId('phase-rail').boundingBox();
+    const mainBox = await page.getByTestId('list-main').boundingBox();
+    expect(pageBox!.width).toBeLessThanOrEqual(880);
+    // Centred in the main area.
+    const left = pageBox!.x - mainBox!.x;
+    const right = mainBox!.x + mainBox!.width - (pageBox!.x + pageBox!.width);
+    expect(Math.abs(left - right)).toBeLessThan(24);
   });
 
   test('a card opens to its goal, tasks and collapsed rows; others keep their state', async ({ page }) => {
@@ -186,6 +240,19 @@ test.describe('multi-phase fixture', () => {
     await expect(s21).toHaveAttribute('data-open', 'true');
 
     await expect(s21.getByTestId('card-goal')).toHaveText('Show every book as a cover grid with sort and filter.');
+    // It opens inside its row: under the toggle line, inside the same list item.
+    const head = await s21.locator('.sprint-head').boundingBox();
+    const body = await s21.getByTestId('card-body').boundingBox();
+    const item = await page.locator('ul.sprints > li', { has: s21 }).boundingBox();
+    expect(head && body && item).toBeTruthy();
+    expect(body!.y).toBeGreaterThanOrEqual(head!.y + head!.height - 1);
+    expect(body!.y + body!.height).toBeLessThanOrEqual(item!.y + item!.height + 1);
+    expect(body!.x).toBeGreaterThanOrEqual(item!.x - 1);
+    expect(body!.x + body!.width).toBeLessThanOrEqual(item!.x + item!.width + 1);
+    // Its contents line up under the title (64 px in).
+    const goal = await s21.getByTestId('card-goal').boundingBox();
+    expect(Math.abs(goal!.x - item!.x - 64)).toBeLessThan(2);
+    await expect(page.locator('ul.sprints > li > article[data-sprint-card="2.1"] > [data-testid="card-body"]')).toHaveCount(1);
     const tasks = s21.getByTestId('tasks-table');
     await expect(tasks.locator('tr')).toHaveCount(4);
     // The not-started task of a sprint that has begun is amber.
@@ -251,13 +318,17 @@ test.describe('multi-phase fixture', () => {
     await expect(row(page, '1.1', 'run-notes')).toHaveCount(0);
   });
 
-  test('#s{id} opens that card and scrolls to it', async ({ page }) => {
+  test('#s{id} opens that row and scrolls to it', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 500 });
-    await open(page, `${loop.baseURL}/list?phase=2#s2.3`);
+    await open(page, `${loop.baseURL}/phase/2#s2.3`);
     await expect(card(page, '2.3')).toHaveAttribute('data-open', 'true');
     await expect(card(page, '2.3').getByTestId('tasks-table')).toBeVisible();
     await expect(card(page, '2.3')).toBeInViewport();
     await expect(card(page, '2.2')).toHaveAttribute('data-open', 'false');
+    // The old query form still lands.
+    await open(page, `${loop.baseURL}/list?phase=2#s2.3`);
+    await expect(card(page, '2.3')).toHaveAttribute('data-open', 'true');
+    await expect(card(page, '2.3')).toBeInViewport();
   });
 });
 
@@ -278,6 +349,7 @@ test.describe('a run in progress', () => {
       expect(await attrs(page.locator('section[data-rail-row]'), 'data-rail-row')).toEqual(['wave-1-1', 'not-run']);
       await expect(railRow(page, 'wave-1-1')).toHaveAttribute('data-row-state', 'done');
       await expect(badge(page, '2.1')).toHaveText('Complete');
+      await expect(badge(page, '2.1')).toHaveClass('row-done');
       await expect(badge(page, '2.2')).toHaveText('Not started');
 
       // The implementer starts 2.2: wave 2 appears, running, and its card opens.
@@ -297,10 +369,23 @@ test.describe('a run in progress', () => {
       await expect(badge(page, '2.2')).toHaveText('Implementing', { timeout: APPEAR_MS });
       await expect(badge(page, '2.2')).toHaveClass(/status run/);
       await expect(card(page, '2.2')).toHaveClass(/\brun\b/);
+      // The running row: its badge, its bar and a 2px cyan left edge; the others stay quiet.
+      const runningColour = await css(badge(page, '2.2'), 'color');
+      expect(await css(card(page, '2.2'), 'boxShadow')).toBe(`${runningColour} 2px 0px 0px 0px inset`);
+      await expect(card(page, '2.2').getByTestId('card-status-bar')).toBeVisible();
+      expect(await css(card(page, '2.1'), 'boxShadow')).toBe('none');
+      await expect(card(page, '2.1').locator('.status')).toHaveCount(0);
+      expect(await css(card(page, '2.4'), 'boxShadow')).toBe('none');
+      await expect(badge(page, '2.4')).toHaveText('Not started');
       const w2 = railRow(page, 'wave-1-2');
       await expect(w2).toHaveAttribute('data-row-state', 'running');
+      await expect(w2.getByTestId('wave-live')).toHaveText('Running');
       await expect(w2.getByTestId('wave-duration')).toHaveText(/ so far$/);
       await expect(card(page, '2.2')).toHaveAttribute('data-open', 'true');
+      // The phase is running: the meta line says so and when it started.
+      await expect(page.getByTestId('phase-status')).toHaveText(/^Running wave \d+ of \d+$/);
+      await expect(page.getByTestId('phase-status').locator('svg.i.run')).toHaveCount(1);
+      await expect(page.getByTestId('phase-time')).toHaveText(/^Started /);
 
       // Task lines: the implementer logs each task as it starts and finishes it, and the
       // task's row follows within 2 s. Running, then Built; never Complete before doc sync.
@@ -367,7 +452,7 @@ test.describe('a run in progress', () => {
       await expect(badge(page, '2.3')).toHaveText('Verifying');
       // Built tasks stay Built while the gates run.
       await expect(words).toHaveText(['Built', 'Built', 'Built']);
-      await expect(w2.getByTestId('wave-mode')).toHaveText('∥ Parallel');
+      await expect(w2.getByTestId('wave-mode')).toHaveText('Parallel');
       expect(await attrs(w2.locator('article[data-sprint-card]'), 'data-sprint-card')).toEqual(['2.2', '2.3']);
       await expect(card(page, '2.3')).toHaveAttribute('data-open', 'true');
 
@@ -382,6 +467,7 @@ test.describe('a run in progress', () => {
       const failedRed = await badge(page, '2.3').evaluate((el) => (globalThis as unknown as Styles).getComputedStyle(el).color);
       await expect(badge(page, '2.3').locator('svg.i.run')).toHaveCSS('color', failedRed);
       await expect(card(page, '2.3')).toHaveClass(/\bfail\b/);
+      expect(await css(card(page, '2.3'), 'boxShadow')).toBe(`${failedRed} 2px 0px 0px 0px inset`);
       await expect(badge(page, '2.2')).toHaveText('Waiting');
       const failure = card(page, '2.3').getByTestId('card-failure');
       await expect(failure).toContainText('Verify attempt 1 failed. test: 2 failing in src/photos/import.test.ts');
@@ -409,17 +495,24 @@ test.describe('a run in progress', () => {
       await expect(badge(page, '2.3')).toHaveText('Doc syncing', { timeout: APPEAR_MS });
       await append(5);
       await expect(w2).toHaveAttribute('data-row-state', 'done', { timeout: APPEAR_MS });
-      await expect(w2.locator('.wave-cell svg.i.pass')).toHaveCount(1);
+      // No done check on the wave, and the Running item goes.
+      await expect(w2.locator('.wave-h svg')).toHaveCount(0);
+      await expect(w2.getByTestId('wave-live')).toHaveCount(0);
       await expect(w2.getByTestId('wave-duration')).toHaveText(/^(under 1 min|\d+ min)$/);
       await expect(badge(page, '2.2')).toHaveText('Complete');
       await expect(badge(page, '2.3')).toHaveText('Complete');
+      // Finished rows go quiet: the check alone, no edge.
+      await expect(badge(page, '2.3')).toHaveClass('row-done');
+      expect(await css(card(page, '2.2'), 'boxShadow')).toBe('none');
+      expect(await css(card(page, '2.3'), 'boxShadow')).toBe('none');
       // Doc sync is logged: every row shows the phase file's status, and none still reads Built.
       await expect(words).toHaveText(['Complete', 'Complete', 'Complete']);
       await expect(page.locator('tr[data-progress]')).toHaveCount(0);
       await expect(card(page, '2.2').locator('svg.i.built')).toHaveCount(0);
       await notes.locator('summary').click();
       await expect(notes.getByTestId('run-note')).toHaveAttribute('data-resolved', 'true');
-      await expect(page.getByTestId('rail-summary')).toHaveText('2 waves · 1 retry');
+      await expect(page.getByTestId('rail-summary')).toHaveText('2 waves');
+      await expect(page.getByTestId('rail-retries')).toHaveText('1 retry');
 
       // Every sprint still appears once, in plan order.
       expect(await attrs(page.locator('article[data-sprint-card]'), 'data-sprint-card')).toEqual([
@@ -474,7 +567,7 @@ test.describe('a sprint with a task left', () => {
 test.describe('an escalation', () => {
   test.use({ viewport: { width: 375, height: 812 } });
 
-  test('three failed verify attempts show the banner at the top of the rail; a later event clears it', async ({ page }) => {
+  test('three failed verify attempts show the banner under the meta line; a later event clears it', async ({ page }) => {
     test.setTimeout(90_000);
     const harness = await startHarness({ clientPort: 4846, serverPort: 4847, freshness: 'fresh' });
     try {
@@ -488,14 +581,22 @@ test.describe('an escalation', () => {
       await expect(banner.locator('strong')).toHaveText('Verify retry limit reached (3/3) on sprint 2.4');
       await expect(banner.locator('p')).toHaveText("Waiting on you in the Claude Code session. The viewer can't act on this.");
       await expect(banner.locator('svg.i.needs')).toHaveCount(1);
-      // Above the phase's status bar and its sprints.
+      // Under the meta line and the phase's status bar, above the waves.
       const bannerBox = await banner.boundingBox();
+      const metaBox = await page.getByTestId('phase-meta').boundingBox();
       const barBox = await page.getByTestId('phase-status-bar').boundingBox();
-      expect(bannerBox && barBox && bannerBox.y < barBox.y).toBe(true);
+      const wavesBox = await page.locator('.waves').boundingBox();
+      expect(bannerBox && metaBox && barBox && wavesBox).toBeTruthy();
+      expect(bannerBox!.y).toBeGreaterThan(metaBox!.y + metaBox!.height);
+      expect(bannerBox!.y).toBeGreaterThan(barBox!.y);
+      expect(bannerBox!.y + bannerBox!.height).toBeLessThanOrEqual(wavesBox!.y);
 
-      // The phase and the sprint read Needs you; the card has one note per failed attempt.
+      // The phase and the sprint read Needs you (the row with its pink edge); the card has one note per failed attempt.
       await expect(page.getByTestId('phase-status')).toHaveText('Needs you');
+      await expect(page.getByTestId('phase-status').locator('svg.i.needs')).toHaveCount(1);
       await expect(badge(page, '2.4')).toHaveText('Needs you');
+      await expect(card(page, '2.4')).toHaveClass(/\bneeds\b/);
+      expect(await css(card(page, '2.4'), 'boxShadow')).toBe(`${await css(banner.locator('strong'), 'color')} 2px 0px 0px 0px inset`);
       if ((await card(page, '2.4').getAttribute('data-open')) !== 'true') {
         await card(page, '2.4').getByTestId('card-toggle').click();
       }
@@ -537,17 +638,24 @@ test.describe('an escalation', () => {
 test.describe('375 px', () => {
   test.use({ viewport: { width: 375, height: 812 } });
 
-  test('no horizontal page scroll, with a card open; the wave cell sits above its cards', async ({ page }) => {
-    await page.goto('/list?phase=2');
+  test('no horizontal page scroll, with a row open; the eyebrow hides and rows stay in their lists', async ({ page }) => {
+    await page.goto('/phase/2');
     await expect(page.getByTestId('phase-rail')).toBeVisible();
+    await expect(page.locator('h1 .eyebrow')).toBeHidden();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveAccessibleName(/^Phase 2: /);
+    await expect(page.getByTestId('phase-meta')).toBeVisible();
     await card(page, '2.1').getByTestId('card-toggle').click();
     await expect(card(page, '2.1').getByTestId('tasks-table')).toBeVisible();
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
 
-    const first = page.locator('section[data-rail-row]').first();
-    const cell = await first.locator('.wave-cell').boundingBox();
-    const cards = await first.locator('.rail-cards').boundingBox();
-    expect(cell && cards).toBeTruthy();
-    expect(cards!.y).toBeGreaterThanOrEqual(cell!.y + cell!.height);
+    for (const section of await page.locator('section[data-rail-row]').all()) {
+      const heading = await section.locator('.wave-h').boundingBox();
+      const list = await section.locator('ul.sprints').boundingBox();
+      expect(heading && list).toBeTruthy();
+      expect(list!.y).toBeGreaterThanOrEqual(heading!.y + heading!.height);
+      // Inside the 375 px screen, less the 16 px gutters.
+      expect(list!.x).toBeGreaterThanOrEqual(15);
+      expect(list!.x + list!.width).toBeLessThanOrEqual(375 - 15);
+    }
   });
 });

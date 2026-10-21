@@ -37,9 +37,7 @@
   align-items: baseline;
 }
 .searched dt {
-  font: 600 11px/1.6 var(--mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font: 600 12px/1.6 var(--sans);
   color: var(--text-3);
 }
 .searched dd {
