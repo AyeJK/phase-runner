@@ -20,22 +20,6 @@ export type HudSince = number;
  */
 export type HudToasted = string[];
 
-/**
- * What the pane shows. `auto` follows the run: the live phase while one is
- * live, else the phase list.
- */
-export type HudNav = { screen: 'auto' } | { screen: 'phases' } | { screen: 'phase'; phase: number };
-
-/**
- * Sprint cards and card rows the person opened or closed, by key
- * (`card:{sprint}`, `{sprint}:criteria`, ...). A key not here takes its
- * default: a card is open while its sprint is running, a row is closed.
- */
-export type HudToggled = Record<string, boolean>;
-
-/** Goes up each time the files the pane draws from change, so the pane draws again. */
-export type HudRevision = number;
-
 declare module 'claude-code' {
   interface PluginState {
     'phase-runner-hud': {
@@ -43,12 +27,6 @@ declare module 'claude-code' {
       since: HudSince;
       /** See {@link HudToasted}. */
       toasted: HudToasted;
-      /** See {@link HudNav}. */
-      nav: HudNav;
-      /** See {@link HudToggled}. */
-      toggled: HudToggled;
-      /** See {@link HudRevision}. */
-      revision: HudRevision;
     };
   }
 }

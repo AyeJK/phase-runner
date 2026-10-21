@@ -1,7 +1,7 @@
 {
   "name": "phase-runner-hud",
-  "version": "0.2.1",
-  "description": "Experimental Claude Code mod for Phase Runner: a pane with phase-viewer's screens and the live run, a toast when a run needs you, and /phase-status with no model call.",
+  "version": "0.3.0",
+  "description": "Experimental Claude Code mod for Phase Runner: a toast when a run needs you, and /phase-status with no model call. phase-viewer is the dashboard.",
   "author": {
     "name": "Jeremy Kaye",
     "url": "https://github.com/AyeJK"
@@ -9,7 +9,7 @@
   "homepage": "https://github.com/AyeJK/phase-runner/tree/main/hud#readme",
   "repository": "https://github.com/AyeJK/phase-runner",
   "license": "MIT",
-  "keywords": ["phase-runner", "pane", "mod", "hud"],
+  "keywords": ["phase-runner", "toast", "mod", "hud"],
   "types": "./types/index.d.ts",
   "userConfig": {
     "workspace": {

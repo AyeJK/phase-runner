@@ -14,7 +14,7 @@
     {
       "name": "phase-runner-hud",
       "source": "./hud",
-      "description": "Experimental, Claude Code only. A mod with a Phase Runner pane (phase-viewer's phases, waves, sprint cards and the live run, beside the conversation), a toast when a run needs you, and /phase-status with no model call. Phase Runner works the same without it."
+      "description": "Experimental, Claude Code only. A mod that raises a toast when a run needs you (an escalation, a blocker, a completed phase) and answers /phase-status with no model call. Phase Runner works the same without it."
     }
   ]
 }

@@ -1,36 +1,17 @@
 /**
  * What every HUD test stands on: a clock the test moves, a folder tree in
- * memory answering `$.fs`, and a record of what the mod showed.
+ * memory answering `$.fs`, and a record of what the mod showed and said.
  *
  * The test's hooks sit beneath the mod, so each `$` call the mod makes lands
  * here. Nothing touches the real file system.
  */
 import type { On } from 'claude-code';
-import { mock, type Engine, type MockClock, type Mounted } from 'claude-code/testing';
+import { mock, type Engine, type MockClock } from 'claude-code/testing';
 
 import { PHASE_4_PLAN, PHASE_4_RETRIES, PHASE_4_WAVE_1, tsOf } from './fixtures.js';
 
 /** The session's directory in every test. */
 export const ROOT = '/work';
-/**
- * Press one of the pane's controls, as a person would: a Button on the
- * terminal, a pill on the desktop (a `pill.tsx` Client posting its press).
- */
-export async function act<S extends 'terminal' | 'desktop'>(ui: Mounted<S, 'Pane'>, key: string): Promise<void> {
-  if (ui.surface === 'desktop') await (ui as unknown as Mounted<'desktop', 'Pane'>).post({ press: true }, { in: key });
-  else await (ui as unknown as Mounted<'terminal', 'Pane'>).press({ key });
-}
-
-/** The words on one of the pane's controls: a Button's label, or the label a pill's Client draws. */
-export async function labelOf<S extends 'terminal' | 'desktop'>(ui: Mounted<S, 'Pane'>, key: string): Promise<string | undefined> {
-  const found = await ui.find({ key });
-  if (!found) return undefined;
-  const props = found.props as { label?: string; props?: { label?: string } };
-  return props.label ?? props.props?.label;
-}
-
-/** The pane's id, as the mod opens it. */
-export const PANE_ID = 'phase-runner';
 /** Where the phase files live under {@link ROOT}. */
 export const PHASES = `${ROOT}/docs/phases`;
 
@@ -49,14 +30,15 @@ export interface EventFields {
 export interface Hud {
   clock: MockClock;
   /**
-   * The pane's live line (`P4 · wave 2 · 4.2 verify 2/3`) each time it
-   * changed, read after the session starts and after each poll; `undefined`
-   * once it has gone. Nothing is recorded until it first shows.
+   * The `Now:` line of `/phase-status` (`wave 2 · 4.2 verify 2/3`) each time
+   * it changed, read after the session starts and after each poll;
+   * `undefined` when the answer has no `Now:` line. Nothing is recorded until
+   * it first shows.
    */
   lines: (string | undefined)[];
-  /** Every `$.ui.status` call, in order. The mod only ever clears it. */
+  /** Every `$.ui.status` call, in order. The mod makes none. */
   statuses: (string | undefined)[];
-  /** The id of every pane the mod opened, in order. */
+  /** The id of every pane the mod opened, in order. The mod opens none. */
   opened: string[];
   /** Every toast's text, in order. */
   toasts: string[];
@@ -74,12 +56,10 @@ export interface Hud {
   start: ($: Engine) => Promise<void>;
   /** Type `/phase-status` at the prompt and return what it printed. */
   phaseStatus: ($: Engine) => Promise<string | undefined>;
-  /** Move the clock on by one poll, then read the live line. */
+  /** Move the clock on by one poll, then read the `Now:` line. */
   tick: () => Promise<void>;
-  /** Read the live line now, recording it in {@link lines} when it changed. */
+  /** Read the `Now:` line now, recording it in {@link lines} when it changed. */
   sample: () => Promise<string | undefined>;
-  /** Draw the pane on a surface and hand back the drawing. */
-  pane: <S extends 'terminal' | 'desktop'>($: Engine, surface: S, columns?: number) => Promise<Mounted<S, 'Pane'>>;
   /** Append each line at its own `ts` (never moving the clock back), with one poll after each. */
   replay: (path: string, lines: readonly string[]) => Promise<void>;
 }
@@ -193,28 +173,22 @@ export function hud(on: On, now: number): Hud {
   const append = (path: string, line: string): void => {
     write(path, `${files.get(norm(path))?.text ?? ''}${line}\n`);
   };
-  const pane = async <S extends 'terminal' | 'desktop'>($: Engine, surface: S, columns = 60): Promise<Mounted<S, 'Pane'>> =>
-    $.ui.mount({
-      plugin: 'phase-runner-hud',
-      surface,
-      component: 'Pane',
-      requestId: PANE_ID,
-      props: {
-        title: 'Phase Runner',
-        isFocused: false,
-        bodyColumns: columns,
-        placement: 'dock',
-        scroll: { offset: 0, bodyRows: 40 },
-        view: {},
-      },
-      viewport: { columns: columns + 40, rows: 50, isFullscreen: true },
+  const phaseStatus = async ($: Engine): Promise<string | undefined> => {
+    const answer = await $.command.run({
+      command: 'phase-status',
+      args: '',
+      origin: { kind: 'composer' },
+      presentation: { isFullscreen: false, columns: 120 },
     });
+    return answer.text;
+  };
   const sample = async (): Promise<string | undefined> => {
-    if (engine === null || opened.length === 0) return undefined;
-    const ui = await pane(engine, 'terminal');
-    const found = await ui.find({ key: 'live' });
-    await ui.unmount();
-    const text = found?.text.replace(/^\S+ LIVE /, '');
+    if (engine === null) return undefined;
+    const answer = await phaseStatus(engine);
+    const text = answer
+      ?.split('\n')
+      .find((l) => l.startsWith('Now: '))
+      ?.slice('Now: '.length);
     const last = lines.length > 0 ? lines[lines.length - 1] : undefined;
     if (text !== last) lines.push(text);
     return text;
@@ -230,7 +204,6 @@ export function hud(on: On, now: number): Hud {
     statuses,
     opened,
     sample,
-    pane,
     toasts,
     sounds,
     commands,
@@ -255,15 +228,7 @@ export function hud(on: On, now: number): Hud {
       await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true });
       await sample();
     },
-    phaseStatus: async ($) => {
-      const answer = await $.command.run({
-        command: 'phase-status',
-        args: '',
-        origin: { kind: 'composer' },
-        presentation: { isFullscreen: false, columns: 120 },
-      });
-      return answer.text;
-    },
+    phaseStatus,
     replay: async (path, lines) => {
       for (const line of lines) {
         const at = Date.parse((JSON.parse(line) as { ts: string }).ts);

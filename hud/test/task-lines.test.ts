@@ -1,10 +1,11 @@
 /**
  * The run log's `task` lines (an implementer starting and finishing each
- * task): they change neither the status line's text nor any toast.
+ * task): they change neither what `/phase-status` says is happening now nor
+ * any toast.
  */
 import { describe, expect, test } from 'claude-code/testing';
 
-import { buildView, current, occurrences, statusReport, statusText } from '../hooks/hud.js';
+import { buildView, current, occurrences, statusReport } from '../hooks/hud.js';
 import { PHASE_4_PLAN, PHASE_4_RETRIES, PHASE_4_WAVE_1, PHASE_4_WAVE_2_END, tsOf } from './fixtures.js';
 import { PHASE_4_LOG, phase4, type Hud } from './harness.js';
 
@@ -54,47 +55,47 @@ async function run(h: Hud, lines: readonly string[]): Promise<void> {
 }
 
 describe('through the loaded mod', () => {
-  test('the status line reads the same with task lines in the log as without them', async ($, on) => {
+  test('/phase-status reads the same with task lines in the log as without them', async ($, on) => {
     const h = phase4(on, tsOf(WITH_TASK_LINES[0]!) - 20_000);
     await h.start($);
     await run(h, WITH_TASK_LINES);
 
     // One entry per change of text: the 8 task lines add none.
     expect(h.lines).toEqual([
-      'P4 · wave 1 · 4.1 done',
-      'P4 · wave 2 · 4.2 implement 1/3',
-      'P4 · wave 2 · 4.2 verify 1/3',
-      'P4 · wave 2 · 4.2 verify failed 1/3',
-      'P4 · wave 2 · 4.2 implement 2/3',
-      'P4 · wave 2 · 4.2 verify 2/3',
-      'P4 · wave 2 · 4.2 verify failed 2/3',
-      'P4 · wave 2 · 4.2 implement 3/3',
-      'P4 · wave 2 · 4.2 verify 3/3',
-      'P4 · wave 2 · 4.2 wave-test 1/3',
-      'P4 · wave 2 · 4.2 doc-sync 1/1',
-      undefined,
+      'wave 1 · 4.1 done',
+      'wave 2 · 4.2 implement 1/3',
+      'wave 2 · 4.2 verify 1/3',
+      'wave 2 · 4.2 verify failed 1/3',
+      'wave 2 · 4.2 implement 2/3',
+      'wave 2 · 4.2 verify 2/3',
+      'wave 2 · 4.2 verify failed 2/3',
+      'wave 2 · 4.2 implement 3/3',
+      'wave 2 · 4.2 verify 3/3',
+      'wave 2 · 4.2 wave-test 1/3',
+      'wave 2 · 4.2 doc-sync 1/1',
+      'phase complete (last: wave 2 · 4.2 done)',
     ]);
   });
 
-  test('the same run without its task lines shows the same status line', async ($, on) => {
+  test('the same run without its task lines reads the same', async ($, on) => {
     expect(WITH_TASK_LINES.length - WITHOUT_TASK_LINES.length).toBe(8);
     const h = phase4(on, tsOf(WITHOUT_TASK_LINES[0]!) - 20_000);
     await h.start($);
     await run(h, WITHOUT_TASK_LINES);
 
     expect(h.lines).toEqual([
-      'P4 · wave 1 · 4.1 done',
-      'P4 · wave 2 · 4.2 implement 1/3',
-      'P4 · wave 2 · 4.2 verify 1/3',
-      'P4 · wave 2 · 4.2 verify failed 1/3',
-      'P4 · wave 2 · 4.2 implement 2/3',
-      'P4 · wave 2 · 4.2 verify 2/3',
-      'P4 · wave 2 · 4.2 verify failed 2/3',
-      'P4 · wave 2 · 4.2 implement 3/3',
-      'P4 · wave 2 · 4.2 verify 3/3',
-      'P4 · wave 2 · 4.2 wave-test 1/3',
-      'P4 · wave 2 · 4.2 doc-sync 1/1',
-      undefined,
+      'wave 1 · 4.1 done',
+      'wave 2 · 4.2 implement 1/3',
+      'wave 2 · 4.2 verify 1/3',
+      'wave 2 · 4.2 verify failed 1/3',
+      'wave 2 · 4.2 implement 2/3',
+      'wave 2 · 4.2 verify 2/3',
+      'wave 2 · 4.2 verify failed 2/3',
+      'wave 2 · 4.2 implement 3/3',
+      'wave 2 · 4.2 verify 3/3',
+      'wave 2 · 4.2 wave-test 1/3',
+      'wave 2 · 4.2 doc-sync 1/1',
+      'phase complete (last: wave 2 · 4.2 done)',
     ]);
   });
 
@@ -116,7 +117,7 @@ describe('through the loaded mod', () => {
     h.append(PHASE_4_LOG, h.line({ sprint: '4.2', gate: 'implement', result: 'start' }));
     await h.tick();
     const before = [...h.lines];
-    expect(before.at(-1)).toBe('P4 · wave 2 · 4.2 implement 1/3');
+    expect(before.at(-1)).toBe('wave 2 · 4.2 implement 1/3');
 
     // Not results an implementer writes on a task line; the mod must still not act on them.
     for (const result of ['start', 'pass', 'fail', 'blocked']) {
@@ -145,7 +146,7 @@ describe('through the loaded mod', () => {
 });
 
 describe('the read model', () => {
-  test('at every line of the run, the status text and the toasts match the log without task lines', () => {
+  test('at every line of the run, the current gate and the toasts match the log without task lines', () => {
     for (let n = 1; n <= WITH_TASK_LINES.length; n++) {
       const lines = WITH_TASK_LINES.slice(0, n);
       const now = tsOf(lines.at(-1)!) + 1000;
@@ -153,7 +154,6 @@ describe('the read model', () => {
       const withTasks = buildView(4, log([...PHASE_4_WAVE_1, ...lines]), PLAN);
       const without = buildView(4, log([...PHASE_4_WAVE_1, ...lines.filter((text) => !isTaskLine(text))]), PLAN);
 
-      expect(statusText(withTasks, now)).toBe(statusText(without, now));
       expect(current(withTasks)).toEqual(current(without));
       expect(occurrences(withTasks, since).map((o) => o.text)).toEqual(occurrences(without, since).map((o) => o.text));
       // `/phase-status`: the same phase, task counts and current gate.

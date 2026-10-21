@@ -1,7 +1,7 @@
 /**
- * The HUD's read model and its texts: the status line, the toasts and the
- * `/phase-status` answer. Pure (file listings and file text in, strings out)
- * and never throws; `register.ts` makes every `$` call.
+ * The HUD's read model and its texts: the toasts and the `/phase-status`
+ * answer. Pure (file listings and file text in, strings out) and never throws;
+ * `register.ts` makes every `$` call.
  *
  * Parsing and run derivation are the viewer's own modules, copied into
  * `core/` by `hud/scripts/sync-core.mjs`. The reading rules are the run-log
@@ -10,9 +10,8 @@
  * in `wave` starts a new run, and an escalation is a `fail` at the retry limit
  * with no later line for that sprint. `task` lines (an implementer starting
  * and finishing each task) are markers too: the derive code keeps them out of
- * every wave's and sprint's events, so they change neither the status line's
- * text nor any toast. They do count as the log's last event, which keeps the
- * line up through a long implementation.
+ * every wave's and sprint's events, so they change neither the current gate
+ * `/phase-status` names nor any toast. They do count as the log's last event.
  */
 import { taskProgress } from './core/derive/progress.js';
 import { deriveRun } from './core/derive/run.js';
@@ -58,7 +57,7 @@ export interface HudView {
   history: Record<string, SprintRun[]>;
 }
 
-/** Where the run is now: the sprint the status line names. */
+/** Where the run is now: the sprint `/phase-status` names. */
 export interface Current {
   /** Wave number within the latest run. */
   wave: number;
@@ -214,7 +213,7 @@ function latestOf(sr: SprintRun, gate: RunGate): RunEvent | undefined {
   return undefined;
 }
 
-/** What a sprint is doing in its wave, as the status line says it. */
+/** What a sprint is doing in its wave, as `/phase-status` says it. */
 function stepOf(sr: SprintRun): string {
   const last = sr.lastEvent;
   if (last === null) return 'implement';
@@ -263,24 +262,6 @@ export function current(view: HudView): Current | null {
   const sprint = byNewest.find((s) => s.state !== 'done') ?? byNewest[0];
   if (!sprint) return null;
   return { wave: wave.wave, sprint: sprint.sprint, step: stepOf(sprint) };
-}
-
-/**
- * The status line: `P{n} · wave {w} · {sprint} {gate} {attempt}/{max}` while
- * the log's last event is under 30 minutes old and the phase isn't complete.
- * `undefined` clears it.
- *
- * @param now Milliseconds since the epoch.
- */
-export function statusText(view: HudView, now: number): string | undefined {
-  const last = lastEvent(view);
-  if (last === null) return undefined;
-  const at = parseTs(last.ts);
-  if (at === null || now - at >= STALE_MS) return undefined;
-  if (isPhaseComplete(view)) return undefined;
-  const cur = current(view);
-  if (cur === null) return undefined;
-  return `P${view.phase} · wave ${cur.wave} · ${cur.sprint} ${cur.step}`;
 }
 
 /** The toast key for a completed phase. */

@@ -1,22 +1,20 @@
 #!/usr/bin/env node
 /**
- * Copies the viewer's pure modules into the HUD mod.
+ * Copies the viewer's pure core modules into the HUD mod.
  *
  * The mod reads phase files and run logs with the same parser and derive code
- * as phase-viewer, and draws its pane from the same view derivations as the
- * viewer's screens (sprint states, badges, waves, run notes). A mod can only
- * import files from its own folder, so the modules are copied from
- * `viewer/src/core/` and `viewer/src/client/` into `hud/hooks/core/` and
- * `hud/hooks/client/`, keeping their paths so their relative imports still
- * resolve. This script is the only thing that writes those two folders, and it
- * never writes anywhere else: `viewer/` is read, not changed.
+ * as phase-viewer, so its toasts and `/phase-status` never disagree with the
+ * viewer. A mod can only import files from its own folder, so the modules are
+ * copied from `viewer/src/core/` into `hud/hooks/core/`, keeping their paths so
+ * their relative imports still resolve. This script is the only thing that
+ * writes that folder, and it never writes anywhere else: `viewer/` is read,
+ * not changed.
  *
  *   node hud/scripts/sync-core.mjs           write the copy
  *   node hud/scripts/sync-core.mjs --check   exit 1 when the copy differs from the source
  *
  * What gets copied: every `.ts` file under `core/parser/` and `core/derive/`,
- * the run-log reader, the client's pure view derivations listed in
- * `ENTRY_FILES`, and whatever those import by relative path. A file that
+ * the run-log reader, and whatever those import by relative path. A file that
  * imports anything else (a `node:` module, a package, React) stops the script,
  * because a mod's hooks module has no Node and draws no DOM.
  *
@@ -31,19 +29,11 @@ const REPO_ROOT = path.resolve(HUD_ROOT, '..');
 const SOURCE = path.join(REPO_ROOT, 'viewer', 'src');
 const TARGET = path.join(HUD_ROOT, 'hooks');
 /** The folders under `hud/hooks/` this script owns, mirroring `viewer/src/`. */
-const OWNED = ['core', 'client'];
+const OWNED = ['core'];
 
 /** Folders copied whole, and single files, relative to `viewer/src/`. */
 const ENTRY_DIRS = ['core/parser', 'core/derive'];
-const ENTRY_FILES = [
-  'core/runlog/read.ts',
-  'client/rail/derive.ts',
-  'client/sprint/status.ts',
-  'client/data/status.ts',
-  'client/live/derive.ts',
-  'client/format.ts',
-  'client/states/warnings.ts',
-];
+const ENTRY_FILES = ['core/runlog/read.ts'];
 
 const IMPORT = /^\s*(?:import|export)\b[^'"]*?\bfrom\s*['"]([^'"]+)['"]|^\s*import\s*['"]([^'"]+)['"]/gm;
 
@@ -126,7 +116,7 @@ function main() {
       console.error('Run: node hud/scripts/sync-core.mjs');
       process.exit(1);
     }
-    console.log(`hud/hooks/{core,client}/ match viewer/src/ (${expected.size} files).`);
+    console.log(`hud/hooks/core/ matches viewer/src/core/ (${expected.size} files).`);
     return;
   }
 
@@ -136,7 +126,7 @@ function main() {
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(file, text);
   }
-  console.log(`Wrote ${expected.size} files to hud/hooks/{core,client}/${stale.length > 0 ? `, removed ${stale.length}` : ''}.`);
+  console.log(`Wrote ${expected.size} files to hud/hooks/core/${stale.length > 0 ? `, removed ${stale.length}` : ''}.`);
 }
 
 try {

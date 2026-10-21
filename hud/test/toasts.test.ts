@@ -29,7 +29,7 @@ test('a third verify failure at max 3 raises one toast', async ($, on) => {
   h.append(PHASE_4_LOG, h.line({ sprint: '4.2', gate: 'verify', result: 'fail', attempt: 3, max: 3, summary: 'still overflows at 375px' }));
   await h.tick();
   expect(h.toasts).toEqual(['Phase 4 needs you: sprint 4.2 verify failed 3/3.']);
-  expect(h.lines.at(-1)).toBe('P4 · wave 2 · 4.2 verify failed 3/3');
+  expect(h.lines.at(-1)).toBe('wave 2 · 4.2 verify failed 3/3');
 
   // It stays one toast however long the run waits.
   await h.clock.advance(60_000);
@@ -79,7 +79,7 @@ test('a run with no retry limit never escalates', async ($, on) => {
   await h.tick();
 
   expect(h.toasts).toEqual([]);
-  expect(h.lines.at(-1)).toBe('P4 · wave 2 · 4.2 verify failed 5');
+  expect(h.lines.at(-1)).toBe('wave 2 · 4.2 verify failed 5');
 });
 
 test('a failed doc-sync raises a toast: it never retries on its own', async ($, on) => {
@@ -98,7 +98,7 @@ test('an escalation from before the session started raises nothing', async ($, o
   await h.start($);
   await h.clock.advance(10_000);
 
-  expect(h.lines).toEqual(['P4 · wave 2 · 4.2 verify failed 3/3']);
+  expect(h.lines).toEqual(['wave 2 · 4.2 verify failed 3/3']);
   expect(h.toasts).toEqual([]);
 });
 
@@ -108,8 +108,8 @@ test('a blocked implementer raises one toast (the real Phase 7 line)', async ($,
   await h.replay(PHASE_7_LOG, [PHASE_7_BLOCKED]);
 
   expect(h.toasts).toEqual(['Phase 7 needs you: sprint 7.5 has a blocked task.']);
-  // Phase 7's log is now the newest, so the status line follows it. It has no phase file here.
-  expect(h.lines.at(-1)).toBe('P7 · wave 5 · 7.5 verify 1/3');
+  // Phase 7's log is now the newest, so /phase-status follows it. It has no phase file here.
+  expect(h.lines.at(-1)).toBe('wave 5 · 7.5 verify 1/3');
 
   // Verify fails and the retry reports the same blocked task: still the one pause, one toast.
   h.append(PHASE_7_LOG, h.line({ phase: 7, wave: 5, sprint: '7.5', gate: 'verify', result: 'fail' }));
@@ -138,7 +138,7 @@ test('a phase that runs again and completes again raises a new toast', async ($,
   // A new run of the phase re-implements Sprint 4.2 (wave numbers restart at 1).
   h.append(PHASE_4_LOG, h.line({ sprint: '4.2', gate: 'implement', result: 'start', wave: 1 }));
   await h.tick();
-  expect(h.lines.at(-1)).toBe('P4 · wave 1 · 4.2 implement 1/3');
+  expect(h.lines.at(-1)).toBe('wave 1 · 4.2 implement 1/3');
   expect(h.toasts).toHaveLength(1);
 
   for (const gate of ['implement', 'verify', 'wave_test']) {

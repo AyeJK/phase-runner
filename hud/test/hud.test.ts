@@ -15,7 +15,6 @@ import {
   phaseFileFor,
   readOptions,
   statusReport,
-  statusText,
   workspaceFolder,
   type Entry,
 } from '../hooks/hud.js';
@@ -90,7 +89,7 @@ describe('reading the log', () => {
     const view = buildView(4, log([...PHASE_4_WAVE_1, ...PHASE_4_RETRIES.slice(0, 2), rerun]), PLAN);
 
     expect(view.waves.map((w) => `${w.run}.${w.wave}`)).toEqual(['1.1', '1.2', '2.1']);
-    expect(statusText(view, Date.parse('2026-09-29T03:00:30Z'))).toBe('P4 · wave 1 · 4.2 verify 1/3');
+    expect(current(view)).toEqual({ wave: 1, sprint: '4.2', step: 'verify 1/3' });
   });
 });
 
@@ -105,7 +104,6 @@ describe('phase complete', () => {
     const done = PHASE_4_PLAN.replace(/\| — \|/g, '| x |').replace('| MANUAL |', '| x |');
     const view = buildView(4, log(PHASE_4_WAVE_1), { file: PLAN.file, text: done });
     expect(isPhaseComplete(view)).toBe(true);
-    expect(statusText(view, Date.parse('2026-09-29T01:52:00Z'))).toBeUndefined();
   });
 
   test('is never reached without the phase file', () => {
