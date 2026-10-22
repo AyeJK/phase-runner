@@ -342,8 +342,7 @@ test.describe('a still trail-log in a long-named folder', () => {
 /** Phase 1's title in the copy: long enough to wrap in the 232px sidebar. */
 const LONG_TITLE = 'Overview, Sprint Detail and States';
 
-/** Dark theme colours the checks read (design-system.md "Viewer tokens"). */
-const TEXT_3 = 'rgb(138, 131, 122)';
+/** Dark theme `--passed`, the colour the checks read (design-system.md "Viewer tokens"). */
 const PASSED = 'rgb(76, 212, 128)';
 
 /** The phase row for phase n inside `scope` (the sidebar or the sheet). */
@@ -404,13 +403,13 @@ test.describe('phase sidebar and switcher', () => {
       await expect(side.getByTestId('phase-filter')).toHaveText('All 3');
       await expect(side.locator('a[data-phase-item]')).toHaveCount(3);
 
-      // Phase 1, complete: a quiet grey check and no bar.
+      // Phase 1, complete: the green check and no bar.
       const p1 = phaseItem(side, 1);
       await expect(p1).toHaveAttribute('data-group', 'complete');
       await expect(p1).toHaveAccessibleName(`Phase 1: ${LONG_TITLE}, Complete`);
       await expect(p1.locator('.ph-n')).toHaveText('1');
       await expect(p1.locator('[data-end]')).toHaveAttribute('data-end', 'pass');
-      await expect(p1.locator('svg.i.pass')).toHaveCSS('color', TEXT_3);
+      await expect(p1.locator('svg.i.pass')).toHaveCSS('color', PASSED);
       await expect(p1.locator('.seg-bar')).toHaveCount(0);
       await expect(p1).not.toHaveAttribute('aria-current');
 

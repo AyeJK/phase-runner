@@ -174,10 +174,6 @@
   width: 14px;
   height: 14px;
 }
-/* Complete is quiet in the list: a grey check. */
-.ph .ph-end .i.pass {
-  color: var(--text-3);
-}
 .ph-count {
   font: 500 12px/21px var(--mono);
   color: var(--text-3);

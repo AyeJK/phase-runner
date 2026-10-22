@@ -11,7 +11,7 @@
  * filter.
  *
  * A row is a link to `/phase/N`: the number, the title (wraps, never cut
- * off), the end item (a quiet `pass` icon when complete, the `run`, `needs`
+ * off), the end item (the green `pass` icon when complete, the `run`, `needs`
  * or `manual` icon, else the task count), and a 4px status bar under the
  * title while the phase is in progress (not complete, not unstarted).
  *
