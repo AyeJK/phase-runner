@@ -344,6 +344,7 @@ function lowContrast(selectors: string[]): string {
 /** The text the light-theme pass reads: every element Phase 9 added, plus the open card. */
 const NEW_TEXT = [
   '.project-name',
+  '.brand-link',
   '.side-h',
   '.side-h b',
   '.ph-n',

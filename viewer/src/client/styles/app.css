@@ -1,6 +1,6 @@
 /*
  * App-wide pieces (design-system.md "Calmer layout" Top bar, "Status bar"):
- * the top bar (wordmark, project name, settings), the status bar, links and
+ * the top bar (project name, Phase Runner link, settings), the status bar, links and
  * screen-reader text. The banner strip and state area are in
  * `shell/shell.css`; the list view and rail have their own files.
  */
@@ -45,10 +45,14 @@
   border-bottom: 1px solid var(--border);
 }
 
-.brand {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
+/* The project folder's name, the headline, so two viewers can be told apart; the full path is its tooltip. */
+.project-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 20px/1.2 var(--sans);
+  color: var(--text);
 }
 
 .wm {
@@ -63,23 +67,26 @@
   margin: 0 auto 20px;
 }
 
-/* The right end: the project name, then the gear. The name shrinks first. */
+/* The right end: the Phase Runner link, then the gear. It never shrinks; the project name does. */
 .head-end {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-width: 0;
+  flex-shrink: 0;
   margin-left: auto;
 }
-/* The project folder's name, so two viewers can be told apart; the full path is its tooltip. */
-.project-name {
-  min-width: 0;
-  max-width: 280px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* "Phase Runner 0.4.0", gold, to the GitHub repo. "v" shows only when the words don't. */
+.brand-link {
   font: 500 13px var(--sans);
-  color: var(--text-2);
+  color: var(--accent-text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.brand-link:hover {
+  text-decoration: underline;
+}
+.brand-v {
+  display: none;
 }
 
 /* Settings (shell/SettingsMenu.tsx): the gear at the right, its dropdown under it. */
@@ -233,10 +240,23 @@ a.link:hover {
     gap: 12px;
     padding: 0 16px;
   }
+  .project-name {
+    font-size: 17px;
+  }
+  /* The empty states' large wordmark (.wm-lg) shrinks with this, so it fits a phone. */
   .wm {
     height: 16px;
   }
   .head-end {
     gap: 8px;
+  }
+}
+
+@media (max-width: 479px) {
+  .brand-words {
+    display: none;
+  }
+  .brand-v {
+    display: inline;
   }
 }

@@ -2,7 +2,7 @@
  * The app root: the live stream, the router and the shell (design-system.md
  * "Calmer layout").
  *
- * The shell is the top bar (wordmark, project name and settings gear), the
+ * The shell is the top bar (project name, Phase Runner link and gear), the
  * connection-lost banner while disconnected, then the view. There is one
  * layout, the list view:
  *

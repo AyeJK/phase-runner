@@ -1,7 +1,7 @@
 /**
  * The shell (design-system.md "Calmer layout", "Loading", "Connection
- * lost"): one layout, the list view; the top bar (wordmark, project name,
- * gear, nothing else); the routes and their redirects; warnings for files no
+ * lost"): one layout, the list view; the top bar (project name, Phase
+ * Runner link, gear, nothing else); the routes and their redirects; warnings for files no
  * phase owns; the loading block; the theme choice; and the connection-lost
  * banner.
  *
@@ -19,6 +19,7 @@
  * - The connection test needs a server that stops and returns, so it starts
  *   its own dev loop on ports 4798 / 4799.
  */
+import { readFileSync } from 'node:fs';
 import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -58,6 +59,13 @@ const ACTIVE_PHASE = 'Phase 2: Trip Journal';
 
 /** A project folder name too long for the top bar at 375 px. */
 const LONG_NAME = 'trail-log-with-a-project-folder-name-long-enough-to-need-an-ellipsis';
+
+/** The viewer's version, which the top bar's Phase Runner link shows. */
+const VERSION = (JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string }).version;
+
+/** Dark theme colours the top bar test reads (design-system.md "Viewer tokens"). */
+const TEXT = 'rgb(236, 232, 225)';
+const ACCENT_TEXT = 'rgb(255, 194, 51)';
 
 /** The run log for a phase with no plan: two lines that can't be read. */
 const ORPHAN_LOG = 'docs/phases/.runs/phase-9.jsonl';
@@ -199,37 +207,59 @@ test.describe('a still trail-log in a long-named folder', () => {
       await expect(page.locator('a[data-phase-item][aria-current="page"]')).toHaveAttribute('data-phase-item', '1');
     });
 
-    test('the top bar is the wordmark, the project name and the gear, with nothing under it but the page', async ({ page }) => {
+    test('the top bar is the project name, the Phase Runner link and the gear, with nothing under it but the page', async ({ page }) => {
       await page.emulateMedia({ colorScheme: 'dark' });
       await open(page, `${loop.baseURL}/phase/2`);
       const head = page.locator('header.app-head');
       await expect(head).toHaveCSS('height', '56px');
 
-      // The wordmark: 20px tall, no glow (in dark, where the glow used to be).
-      const wm = head.locator('svg.wm');
-      await expect(wm).toHaveCSS('height', '20px');
-      await expect(wm).toHaveCSS('filter', 'none');
+      // No wordmark in the bar any more.
+      await expect(head.locator('svg.wm')).toHaveCount(0);
 
-      // The project name: the folder's name, the full path as its tooltip only.
+      // The project name at the left, the headline: the folder's name, the full path as its tooltip only.
       const name = head.getByTestId('project-name');
       await expect(name).toHaveText(LONG_NAME);
       await expect(name).toHaveAttribute('title', loop.fixture.root);
       await expect(page).toHaveTitle(new RegExp(` · ${LONG_NAME}$`));
-      await expect(name).toHaveCSS('font-size', '13px');
-      await expect(name).toHaveCSS('font-weight', '500');
+      await expect(name).toHaveCSS('font-size', '20px');
+      await expect(name).toHaveCSS('font-weight', '600');
+      await expect(name).toHaveCSS('color', TEXT);
       await expect(name).toHaveCSS('text-overflow', 'ellipsis');
-      expect((await name.boundingBox())!.width).toBeLessThanOrEqual(280);
-
-      // Then the gear, 12px to its right; nothing else in the bar.
-      const gear = head.getByRole('button', { name: 'Settings' });
+      const headBox = (await head.boundingBox())!;
       const nameBox = (await name.boundingBox())!;
+      expect(Math.round(nameBox.x - headBox.x)).toBe(24);
+
+      // At the right, "Phase Runner 0.4.0" in gold, linking to the repo in a new tab.
+      const link = head.getByTestId('brand-link');
+      expect(await link.innerText()).toBe(`Phase Runner ${VERSION}`);
+      await expect(link).toHaveAccessibleName(`Phase Runner ${VERSION} on GitHub`);
+      await expect(link).toHaveAttribute('href', 'https://github.com/AyeJK/phase-runner');
+      await expect(link).toHaveAttribute('target', '_blank');
+      await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+      await expect(link).toHaveCSS('color', ACCENT_TEXT);
+      await expect(link).toHaveCSS('font-size', '13px');
+      await expect(link).toHaveCSS('font-weight', '500');
+      await expect(link).toHaveCSS('text-decoration-line', 'none');
+      await link.hover();
+      await expect(link).toHaveCSS('text-decoration-line', 'underline');
+      await page.mouse.move(640, 600);
+      // The focus ring, from the keyboard.
+      await link.focus();
+      await expect(link).toHaveCSS('outline-style', 'solid');
+      await expect(link).toHaveCSS('outline-width', '2px');
+
+      // Then the gear, 12px to its right, inside the 24px gutter; nothing else in the bar.
+      const gear = head.getByRole('button', { name: 'Settings' });
+      const linkBox = (await link.boundingBox())!;
       const gearBox = (await gear.boundingBox())!;
-      expect(Math.round(gearBox.x - (nameBox.x + nameBox.width))).toBe(12);
+      expect(linkBox.x).toBeGreaterThan(nameBox.x + nameBox.width);
+      expect(Math.round(gearBox.x - (linkBox.x + linkBox.width))).toBe(12);
+      expect(Math.round(gearBox.x + gearBox.width)).toBe(1280 - 24);
       await expect(head.locator('button')).toHaveCount(1);
-      await expect(head.locator('a, nav, [role="group"]')).toHaveCount(0);
+      await expect(head.locator('a')).toHaveCount(1);
+      await expect(head.locator('nav, [role="group"]')).toHaveCount(0);
 
       // Under the bar, the page itself.
-      const headBox = (await head.boundingBox())!;
       const layout = (await page.getByTestId('list-view').boundingBox())!;
       expect(Math.round(layout.y)).toBe(Math.round(headBox.y + headBox.height));
     });
@@ -304,16 +334,16 @@ test.describe('a still trail-log in a long-named folder', () => {
   test.describe('375 px', () => {
     test.use({ viewport: { width: 375, height: 812 } });
 
-    test('a long project name ends in an ellipsis and keeps the gear on screen', async ({ page }) => {
+    test('a long project name ends in an ellipsis; the link shortens to its version and the gear stays on screen', async ({ page }) => {
       await open(page, `${loop.baseURL}/phase/2`);
       const head = page.locator('header.app-head');
       await expect(head).toHaveCSS('height', '52px');
       await expect(head).toHaveCSS('padding-left', '16px');
-      await expect(head.locator('svg.wm')).toHaveCSS('height', '16px');
 
       const name = head.getByTestId('project-name');
       await expect(name).toBeVisible();
       await expect(name).toHaveText(LONG_NAME);
+      await expect(name).toHaveCSS('font-size', '17px');
       // Cut short with an ellipsis: the text is wider than the box it shows in.
       expect(
         await name.evaluate((el) => {
@@ -323,13 +353,32 @@ test.describe('a still trail-log in a long-named folder', () => {
       ).toBe(true);
       await expect(name).toHaveCSS('text-overflow', 'ellipsis');
 
-      // The wordmark, the name and the gear side by side, the gear inside the 16px gutter, 8px after the name.
-      const wmBox = (await head.locator('svg.wm').boundingBox())!;
+      // Below 480px the link is just the version; its name stays whole.
+      const link = head.getByTestId('brand-link');
+      await expect(link).toBeVisible();
+      expect(await link.innerText()).toBe(`v${VERSION}`);
+      await expect(link).toHaveAccessibleName(`Phase Runner ${VERSION} on GitHub`);
+
+      // The name, the link and the gear side by side, the gear inside the 16px gutter, 8px after the link.
       const nameBox = (await name.boundingBox())!;
+      const linkBox = (await link.boundingBox())!;
       const gearBox = (await head.getByRole('button', { name: 'Settings' }).boundingBox())!;
-      expect(nameBox.x).toBeGreaterThanOrEqual(wmBox.x + wmBox.width);
-      expect(Math.round(gearBox.x - (nameBox.x + nameBox.width))).toBe(8);
+      expect(Math.round(nameBox.x)).toBe(16);
+      expect(linkBox.x).toBeGreaterThanOrEqual(nameBox.x + nameBox.width);
+      expect(Math.round(gearBox.x - (linkBox.x + linkBox.width))).toBe(8);
       expect(gearBox.x + gearBox.width).toBeLessThanOrEqual(375 - 16 + 0.5);
+      expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    });
+  });
+
+  test.describe('768 px', () => {
+    test.use({ viewport: { width: 768, height: 900 } });
+
+    test('the link shows its words again from 480px', async ({ page }) => {
+      await open(page, `${loop.baseURL}/phase/2`);
+      const head = page.locator('header.app-head');
+      expect(await head.getByTestId('brand-link').innerText()).toBe(`Phase Runner ${VERSION}`);
+      await expect(head.getByTestId('project-name')).toHaveCSS('font-size', '20px');
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     });
   });
