@@ -117,7 +117,7 @@ test.describe('multi-phase fixture', () => {
     await expect(page.getByTestId('phase-time')).toHaveText(/^Started (\w{3} \d{1,2}, )?\d{1,2}:\d{2} [AP]M$/);
     await expect(meta).toHaveText(/^1 task blocked·1 of 8 tasks·1 wave·No retries·Started /);
     // Not complete: the status bar shows, under the meta line.
-    await expect(page.getByTestId('phase-status-bar')).toHaveClass(/started/);
+    await expect(page.getByTestId('phase-status-bar')).toBeVisible();
     // No "Sprints" line and no last-event time.
     await expect(page.locator('.rail-meta, h2.rail-h')).toHaveCount(0);
     await expect(page.getByText(/last event/)).toHaveCount(0);
@@ -255,8 +255,9 @@ test.describe('multi-phase fixture', () => {
     await expect(page.locator('ul.sprints > li > article[data-sprint-card="2.1"] > [data-testid="card-body"]')).toHaveCount(1);
     const tasks = s21.getByTestId('tasks-table');
     await expect(tasks.locator('tr')).toHaveCount(4);
-    // The not-started task of a sprint that has begun is amber.
-    await expect(tasks.locator('tr.remaining')).toHaveAttribute('data-task', '4');
+    // The not-started task of a sprint that has begun stays plain grey.
+    await expect(tasks.locator('tr[data-task="4"]')).toHaveAttribute('data-status', 'todo');
+    await expect(tasks.locator('tr[data-task="4"]')).not.toHaveClass(/remaining/);
 
     // Four collapsed rows, all closed.
     const rows = s21.locator('details[data-row]');
@@ -402,7 +403,6 @@ test.describe('a run in progress', () => {
         );
       const words = card(page, '2.2').getByTestId('tasks-table').locator('td.st');
       await expect(words).toHaveText(['Not started', 'Not started', 'Not started']);
-      await expect(card(page, '2.2').locator('tr.remaining')).toHaveCount(0);
       const bar = card(page, '2.2').getByTestId('card-status-bar');
       await expect(bar).toHaveAttribute('aria-label', '3 not started');
       const phaseBarBefore = await page.getByTestId('phase-status-bar').first().getAttribute('aria-label');
@@ -413,12 +413,10 @@ test.describe('a run in progress', () => {
       await expect(taskRow('2.2', 1)).toHaveAttribute('data-progress', 'running');
       await expect(taskRow('2.2', 1)).toHaveAttribute('data-status', 'todo');
       await expect(taskRow('2.2', 1).locator('svg.i.run')).toHaveCount(1);
-      // A task under way means the sprint has begun: the rows still to do stand out.
-      await expect(taskRow('2.2', 2)).toHaveClass(/remaining/);
-      await expect(taskRow('2.2', 1)).not.toHaveClass(/remaining/);
+      // The rows still to do stay plain grey Not started.
+      await expect(taskRow('2.2', 2).locator('td.st')).toHaveText('Not started');
       // The card's status bar fills with it, in the run's colour.
       await expect(bar).toHaveAttribute('aria-label', '1 running, 2 not started');
-      await expect(bar).toHaveClass(/started/);
 
       await taskLines(['pass', 1], ['start', 2]);
       await expect(taskRow('2.2', 1).locator('td.st')).toHaveText('Built', { timeout: APPEAR_MS });
@@ -532,7 +530,7 @@ test.describe('a run in progress', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('a sprint with a task left', () => {
-  test('shows the amber Waiting badge and the amber status-bar segment', async ({ page }) => {
+  test('shows a neutral Waiting badge and a grey status-bar segment', async ({ page }) => {
     const harness = await startHarness({ clientPort: 4844, serverPort: 4845, freshness: 'fresh' });
     try {
       const file = path.join(harness.fixture.phasesDir, 'Phase-2-Trip-Journal.md');
@@ -542,18 +540,20 @@ test.describe('a sprint with a task left', () => {
       await open(page, `${harness.baseURL}/list?phase=2`);
       const s21 = card(page, '2.1');
       await expect(badge(page, '2.1')).toHaveText('Waiting');
-      await expect(badge(page, '2.1')).toHaveClass(/status remaining/);
+      await expect(badge(page, '2.1')).toHaveClass(/status wait/);
+      await expect(badge(page, '2.1')).toHaveCSS('color', 'rgb(84, 77, 68)');
+      await expect(badge(page, '2.1')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
       await expect(badge(page, '2.1').locator('svg.i.wait')).toHaveCount(1);
-      await expect(s21).toHaveClass(/remaining/);
+      // Idle: no edge on the row.
+      await expect(s21).toHaveCSS('box-shadow', 'none');
 
       const bar = s21.getByTestId('card-status-bar');
-      await expect(bar).toHaveClass(/started/);
       const todo = bar.locator('i[data-status="todo"]');
       await expect(todo).toHaveCount(1);
-      await expect(todo).toHaveCSS('background-color', 'rgb(255, 176, 0)');
+      await expect(todo).toHaveCSS('background-color', 'rgb(207, 200, 188)');
 
       await s21.getByTestId('card-toggle').click();
-      await expect(s21.getByTestId('tasks-table').locator('tr.remaining')).toHaveAttribute('data-task', '3');
+      await expect(s21.getByTestId('tasks-table').locator('tr[data-task="3"] td.st')).toHaveText('Not started');
     } finally {
       await harness.close();
     }

@@ -164,29 +164,6 @@
 .tasks tr.cut .text {
   text-decoration: line-through;
 }
-/* Not started in a sprint that has begun: an amber band, with a 2px amber
-   edge, drawn 10px past the table's ends by shadows so no column moves. The
-   tint is opaque (mixed onto the panel's --surface) so the edge shadow
-   underneath doesn't show through it. */
-.tasks tr.remaining {
-  --remaining-bg: color-mix(in srgb, var(--accent) 11%, var(--surface));
-}
-.tasks tr.remaining td {
-  background: var(--remaining-bg);
-}
-.tasks tr.remaining td.st {
-  color: var(--accent-text);
-  box-shadow:
-    -8px 0 0 var(--remaining-bg),
-    -10px 0 0 var(--accent);
-}
-.tasks tr.remaining td:last-child {
-  box-shadow: 8px 0 0 var(--remaining-bg);
-}
-.tasks tr.remaining .st .i {
-  color: var(--accent);
-}
-
 /* ---------- Acceptance criteria ---------- */
 
 .criteria {

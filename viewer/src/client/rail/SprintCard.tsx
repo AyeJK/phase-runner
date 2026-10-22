@@ -9,13 +9,12 @@
  *   title while the sprint isn't Complete. The end item is the state badge,
  *   except Complete, which is the green `pass` icon alone (its word hidden).
  *   Colour is an edge, not a border: a 2px left edge in the running, failed,
- *   needs-you or manual colour, and the amber tint and edge for Waiting.
+ *   needs-you or manual colour; Waiting is idle, so it has no edge and a grey badge.
  *   While the sprint is implemented the bar fills in the running colour, a
  *   task at a time, from the implementer's `task` lines. A row that turns
  *   Complete while on screen keeps its all-green bar for
  *   {@link COMPLETE_BAR_MS} first.
- * - Open, inside the same row: the goal, the tasks table (shared `TasksTable`, not-started rows in
- *   amber once the sprint has begun, and rows following the implementer's
+ * - Open, inside the same row: the goal, the tasks table (shared `TasksTable`, with rows following the implementer's
  *   `task` lines as Running then Built until doc sync), the failure being retried (while there
  *   is one), then collapsed rows: Acceptance criteria (count), Dependencies
  *   (as text), Verification (count) and Run notes (count; left out when the
@@ -43,23 +42,22 @@ import { doneOfEligible, liveTaskCounts, liveTaskStates } from '../sprint/status
 import { isFailedState, isGateState, type CurrentFailure, type RailSprint, type RunNote, type SprintState } from './derive.js';
 
 /** Badge class (`.status.{kind}`) per state; `not-started` is a plain tag instead. */
-function badgeKind(state: SprintState): 'run' | 'fail' | 'pass' | 'needs' | 'manual' | 'remaining' {
+function badgeKind(state: SprintState): 'run' | 'fail' | 'pass' | 'needs' | 'manual' | 'wait' {
   if (isGateState(state)) return 'run';
   if (isFailedState(state)) return 'fail';
   if (state === 'complete') return 'pass';
   if (state === 'needs-you') return 'needs';
   if (state === 'manual') return 'manual';
-  return 'remaining';
+  return 'wait';
 }
 
-/** Row class per state: the edge (and, for Waiting, the tint) the design gives each. */
+/** Row class per state: the edge the design gives each. Waiting, like Not started, has none. */
 function rowClass(state: SprintState, dashed: boolean): string {
   const classes = ['sprint-row'];
   if (isGateState(state)) classes.push('run');
   else if (isFailedState(state)) classes.push('fail');
   else if (state === 'needs-you') classes.push('needs');
   else if (state === 'manual') classes.push('manual');
-  else if (state === 'waiting') classes.push('remaining');
   if (dashed) classes.push('dashed');
   return classes.join(' ');
 }
@@ -217,7 +215,7 @@ export function StateBadge({ state, text }: { state: SprintState; text: string }
   }
   const kind = badgeKind(state);
   // A failed gate is still working (its retry is next): the spinner, in red.
-  const icon: IconKind = kind === 'remaining' ? 'wait' : kind === 'fail' ? 'run' : kind;
+  const icon: IconKind = kind === 'fail' ? 'run' : kind;
   return (
     <span className={`status ${kind}`} data-testid="card-state" data-state={state}>
       <StatusIcon kind={icon} />

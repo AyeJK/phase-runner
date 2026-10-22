@@ -215,11 +215,7 @@
 .sprint-row.manual {
   box-shadow: inset 2px 0 0 var(--manual);
 }
-/* Waiting: the amber remaining look, a tint and a 2px amber edge. */
-.sprint-row.remaining {
-  background: var(--remaining-bg);
-  box-shadow: inset 2px 0 0 var(--accent);
-}
+/* Waiting is idle: no edge, no tint. */
 
 /* The toggle row; the button's hit area covers it, status bar included. */
 .sprint-head {
@@ -300,14 +296,13 @@
   color: var(--text);
 }
 
-/* Waiting badge: amber text on the warning fill, the dot in the accent. */
-.status.remaining {
-  color: var(--accent-text);
-  background: var(--warn-bg);
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+/* Waiting badge: neutral, an outline with a grey dot, a shade brighter than the Not started tag. */
+.status.wait {
+  color: var(--text-2);
+  border-color: var(--border-strong);
 }
-.status.remaining .i {
-  color: var(--accent);
+.status.wait .i {
+  color: var(--text-3);
 }
 
 /* Under the title, across the title and end columns (36px + 12px in, 16px + 12px from the right). */

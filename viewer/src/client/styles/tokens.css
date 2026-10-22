@@ -104,9 +104,6 @@
   --head: 56px; /* top bar (52px below 720px), and the rail's heading bar */
   --side: 264px; /* phase sidebar (232px from 720 to 1099px) */
   --content: 880px; /* max width of the phase page, centred in the main area */
-
-  /* The amber "remaining" tint on a Waiting card (same mix as `tr.remaining`, on the card fill). */
-  --remaining-bg: color-mix(in srgb, var(--accent) 11%, var(--card));
 }
 
 @media (min-width: 720px) and (max-width: 1099px) {

@@ -104,9 +104,8 @@ export interface NotStarted {
 
 /**
  * To-do and manual tasks in the phase's sprints that haven't started (see
- * {@link sprintStarted}). A phase bar draws these grey "not started": apart
- * from the amber to-do tasks left in sprints already under way, and with a
- * planned manual task kept quiet (not violet) until its sprint starts.
+ * {@link sprintStarted}). A phase bar keeps a planned manual task among them
+ * quiet (grey "not started", not violet) until its sprint starts.
  */
 export function notStartedTasks(project: Project, phase: Phase): NotStarted {
   const runs = phaseRuns(project, phase.number);

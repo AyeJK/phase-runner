@@ -32,31 +32,27 @@ export function StatusBadge({ badge, testId }: { badge: BadgeView; testId?: stri
  * blocked task gets the pink `needs` icon and word, a manual task the violet
  * `manual` icon and word (from `taskIcon`); only a blocked one gets a note
  * under its text, since a manual task's text already says what to do. A cut or deferred task is struck
- * through. Once any task is done or running, the not-started ones are
- * `remaining` and highlighted in amber, so a straggler doesn't fade into
- * the grey of a sprint nobody has touched.
+ * through. Not-started tasks stay plain grey whether or not the sprint has
+ * begun: waiting is idle, not a status colour.
  *
  * `live` is the sprint's live task progress (`liveTaskStates`): while the
  * sprint is being implemented, a not-started row whose task number is in it
  * reads Running or Built instead (`data-progress` says which; `data-status`
- * stays the phase file's status). Such a row counts as started and is never
- * `remaining`. Rows with any other status are never overlaid.
+ * stays the phase file's status). Rows with any other status are never overlaid.
  */
 export function TasksTable({ tasks, live }: { tasks: readonly Task[]; live?: ReadonlyMap<number, LiveTaskState> }) {
   if (tasks.length === 0) return <p className="none">No tasks</p>;
   const rows = tasks.map((task) => ({ task, view: taskRow(task, live) }));
-  const started = rows.some(({ task, view }) => task.status === 'done' || task.status === 'active' || view.live !== null);
   return (
     <table className="tasks" data-testid="tasks-table">
       <tbody>
         {rows.map(({ task, view }) => {
           const cut = task.status === 'cut' || task.status === 'deferred';
-          const remaining = started && task.status === 'todo' && view.live === null;
           const icon = view.icon;
           return (
             <tr
               key={task.line}
-              className={cut ? 'cut' : remaining ? 'remaining' : undefined}
+              className={cut ? 'cut' : undefined}
               data-task={task.number ?? ''}
               data-status={task.status}
               data-progress={view.live ?? undefined}

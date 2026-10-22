@@ -99,12 +99,11 @@ test.describe('the rail in the list view', () => {
 
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Phase 2: Library UI');
     await expect(page.getByTestId('phase-progress-text')).toHaveText('1 of 8 tasks');
-    // The phase's status bar: the sprint bar over every task in the phase. To-do tasks in
-    // sprints already under way ("to do", amber) come before those in sprints not started.
+    // The phase's status bar: the sprint bar over every task in the phase. Not-started tasks
+    // are one grey segment, whether or not their sprint is under way.
     const phaseBar = page.getByTestId('phase-status-bar');
-    await expect(phaseBar).toHaveClass(/started/);
-    await expect(phaseBar).toHaveAttribute('aria-label', /^1 complete, 1 running, 1 blocked, 1 to do, \d+ not started/);
-    await expect(phaseBar.locator('i[data-status="future"]')).toHaveCount(1);
+    await expect(phaseBar).toHaveAttribute('aria-label', /^1 complete, 1 running, 1 blocked, \d+ not started/);
+    await expect(phaseBar.locator('i[data-status="todo"]')).toHaveCount(1);
     await expect(phaseBar.locator('i').first()).toHaveAttribute('data-status', 'done');
     await expect(page.getByTestId('phase-status')).toHaveText('1 task blocked');
     // No file path under the title.
@@ -191,18 +190,21 @@ test.describe('the rail in the list view', () => {
     await expect(card.getByTestId('criteria')).toBeHidden();
   });
 
-  test('not-started tasks are highlighted once their sprint has begun', async ({ page }) => {
+  test('not-started tasks stay grey once their sprint has begun', async ({ page }) => {
     await open(page, '/list?phase=2');
-    // 2.1 has a done task, so its not-started task 4 stands out, in the table and the bar.
+    // 2.1 has a done task; its not-started task 4 still reads as plain grey, in the table and the bar.
     const s21 = await openCard(page, '2.1');
-    await expect(s21.locator('tr.remaining')).toHaveCount(1);
-    await expect(s21.locator('tr.remaining')).toHaveAttribute('data-task', '4');
-    await expect(s21.getByTestId('card-status-bar')).toHaveClass(/started/);
-    // 2.2 hasn't begun: its not-started tasks stay plain.
+    const task4 = s21.locator('tr[data-task="4"]');
+    await expect(task4).not.toHaveClass(/remaining/);
+    await expect(task4.locator('td.st')).toHaveCSS('color', 'rgb(110, 102, 92)');
+    await expect(s21.getByTestId('card-status-bar').locator('i[data-status="todo"]')).toHaveCSS(
+      'background-color',
+      'rgb(207, 200, 188)',
+    );
+    // 2.2 hasn't begun: the same plain rows.
     const s22 = await openCard(page, '2.2');
     await expect(s22.locator('tr[data-status="todo"]').first()).toBeVisible();
-    await expect(s22.locator('tr.remaining')).toHaveCount(0);
-    await expect(s22.getByTestId('card-status-bar')).not.toHaveClass(/started/);
+    await expect(s22.locator('tr[data-status="todo"] td.st').first()).toHaveCSS('color', 'rgb(110, 102, 92)');
   });
 
   // Moved from Sprint detail (Sprint 7.4): the same tasks table, now on the card.

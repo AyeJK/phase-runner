@@ -197,14 +197,10 @@
 .seg-bar i[data-status='manual'] {
   background: var(--manual);
 }
+/* Not started is grey whether or not the sprint has begun: waiting is idle, not a status colour. */
 .seg-bar i[data-status='todo'],
-.seg-bar i[data-status='future'],
 .seg-bar i[data-status='unknown'] {
   background: var(--border-strong);
-}
-/* Once work has begun, not-started tasks show amber, as in the tasks table. */
-.seg-bar.started i[data-status='todo'] {
-  background: var(--accent);
 }
 .seg-bar i[data-status='deferred'] {
   background: color-mix(in srgb, var(--text-3) 55%, transparent);
