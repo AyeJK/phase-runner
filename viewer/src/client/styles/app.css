@@ -88,11 +88,12 @@
 .brand-v {
   display: none;
 }
-/* "dev", only under Vite's dev server (TopBar.tsx). Grey, like a tag. */
+/* "dev", only under Vite's dev server (TopBar.tsx). Purple, so it can't pass for the published viewer. */
 .dev-tag {
   font: 500 11px var(--mono);
-  color: var(--text-2);
-  border: 1px solid var(--border-strong);
+  color: var(--manual);
+  background: var(--manual-bg);
+  border: 1px solid var(--manual);
   border-radius: 3px;
   padding: 1px 6px;
   white-space: nowrap;

@@ -13,7 +13,7 @@
  * package.json, set at build time) and opens the GitHub repo in a new tab.
  * Below 480px only "v0.4.0" shows; its accessible name stays whole.
  *
- * Under Vite's dev server (`npm run dev`) a grey "dev" tag sits before the
+ * Under Vite's dev server (`npm run dev`) a purple "dev" tag sits before the
  * link, so the dev viewer can't be mistaken for the published one.
  *
  * Test hooks: `project-name`, `brand-link`, `dev-tag`.
