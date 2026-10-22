@@ -1,8 +1,14 @@
 /**
  * The phase list (design-system.md "Calmer layout", Sidebar): the heading
- * line ("Phases" / "7 of 8 complete") and one row per phase. The sidebar and
- * the phone switcher's sheet both render this, so the two can't drift apart;
- * the switcher's button reuses {@link PhaseEndItem} for its end item.
+ * line ("Phases" and the filter, {@link PhaseFilterMenu}) and one row per
+ * phase the filter (`?show=`) lets through. The sidebar and the phone
+ * switcher's sheet both render this, so the two can't drift apart; the
+ * switcher's button reuses {@link PhaseEndItem} for its end item.
+ *
+ * Counts come from the rows' groups (`phaseGroup`). A filter nothing matches
+ * shows one grey line ("No phases in progress"). The selected phase stays on
+ * the page even when the filter hides its row, and the rows' links keep the
+ * filter.
  *
  * A row is a link to `/phase/N`: the number, the title (wraps, never cut
  * off), the end item (a quiet `pass` icon when complete, the `run`, `needs`
@@ -10,12 +16,16 @@
  * title while the phase is in progress (not complete, not unstarted).
  *
  * Test hooks: `a[data-phase-item]` (with `data-group`, and
- * `aria-current="page"` on the selected one), `[data-end]` on its end item.
+ * `aria-current="page"` on the selected one), `[data-end]` on its end item,
+ * `phases-empty`, plus {@link PhaseFilterMenu}'s.
  */
+import { useMemo } from 'react';
 import { StatusIcon } from '../components/StatusIcon.js';
 import { StatusSegments } from '../components/StatusSegments.js';
-import { Link, paths } from '../shell/router.js';
-import type { PhaseRow } from './derive.js';
+import { countGroups, PHASE_FILTERS, type PhaseFilter } from '../rail/derive.js';
+import { Link, paths, readShow, useRouter } from '../shell/router.js';
+import { filterPhaseRows, type PhaseRow } from './derive.js';
+import { PhaseFilterMenu } from './PhaseFilterMenu.js';
 
 /** Words for an icon end item (its accessible name). */
 const END_WORDS = {
@@ -64,34 +74,51 @@ interface PhaseListProps {
   onChoose?: () => void;
 }
 
-/** The heading line and the phase rows. */
+/** The heading line with the filter, and the rows the filter shows. */
 export function PhaseList({ rows, selected, onChoose }: PhaseListProps) {
-  const complete = rows.filter((r) => r.group === 'complete').length;
+  const show = readShow(useRouter().location.search);
+  const counts = useMemo(() => countGroups(rows.map((r) => r.group)), [rows]);
+  const shown = filterPhaseRows(rows, show);
+  const empty = PHASE_FILTERS.find((f) => f.key === show)!.empty;
   return (
     <>
       <div className="side-h">
         <b>Phases</b>
-        <span data-testid="phases-complete">
-          {complete} of {rows.length} complete
-        </span>
+        <PhaseFilterMenu show={show} counts={counts} />
       </div>
-      <ol className="phases">
-        {rows.map((row) => (
-          <li key={row.number}>
-            <PhaseRowLink row={row} current={row.number === selected} onChoose={onChoose} />
-          </li>
-        ))}
-      </ol>
+      {shown.length > 0 ? (
+        <ol className="phases">
+          {shown.map((row) => (
+            <li key={row.number}>
+              <PhaseRowLink row={row} show={show} current={row.number === selected} onChoose={onChoose} />
+            </li>
+          ))}
+        </ol>
+      ) : (
+        empty !== null && (
+          <p className="phases-empty" data-testid="phases-empty">
+            {empty}
+          </p>
+        )
+      )}
     </>
   );
 }
 
+interface PhaseRowLinkProps {
+  row: PhaseRow;
+  /** The filter, kept in the row's link. */
+  show: PhaseFilter;
+  current: boolean;
+  onChoose?: () => void;
+}
+
 /** One phase row. */
-function PhaseRowLink({ row, current, onChoose }: { row: PhaseRow; current: boolean; onChoose?: () => void }) {
+function PhaseRowLink({ row, show, current, onChoose }: PhaseRowLinkProps) {
   return (
     <Link
       className="ph"
-      to={paths.phase(row.number)}
+      to={paths.phase(row.number, show)}
       options={{ scroll: false }}
       aria-current={current ? 'page' : undefined}
       aria-label={phaseRowName(row)}

@@ -292,6 +292,20 @@ export interface PhaseMeta {
 /** A phase's group. See the module comment. */
 export type PhaseGroup = 'progress' | 'complete' | 'future';
 
+/** The phase list's filter (`?show=`): every phase, or one group. */
+export type PhaseFilter = 'all' | PhaseGroup;
+
+/**
+ * The phase list's filters in menu order: the label, and the line shown when
+ * no phase matches (`null` for All, which is empty only with no phases).
+ */
+export const PHASE_FILTERS: ReadonlyArray<{ key: PhaseFilter; label: string; empty: string | null }> = [
+  { key: 'all', label: 'All', empty: null },
+  { key: 'progress', label: 'In progress', empty: 'No phases in progress' },
+  { key: 'complete', label: 'Complete', empty: 'No complete phases' },
+  { key: 'future', label: 'Not started', empty: 'No phases not started' },
+];
+
 // ---------------------------------------------------------------------------
 // Rail view
 // ---------------------------------------------------------------------------
@@ -892,9 +906,14 @@ export function phaseGroup(project: Project, phase: Phase): PhaseGroup {
   return started || busy ? 'progress' : 'future';
 }
 
-/** Phase counts per group, and of all phases (the phase list's "7 of 8 complete"). */
-export function phaseGroupCounts(project: Project): Record<PhaseGroup | 'all', number> {
-  const counts: Record<PhaseGroup | 'all', number> = { all: project.phases.length, progress: 0, complete: 0, future: 0 };
-  for (const phase of project.phases) counts[phaseGroup(project, phase)]++;
+/** Phase counts per group, and of all phases (the phase list's filter menu). */
+export function phaseGroupCounts(project: Project): Record<PhaseFilter, number> {
+  return countGroups(project.phases.map((phase) => phaseGroup(project, phase)));
+}
+
+/** How many of `groups` fall in each group, and in all. */
+export function countGroups(groups: readonly PhaseGroup[]): Record<PhaseFilter, number> {
+  const counts: Record<PhaseFilter, number> = { all: groups.length, progress: 0, complete: 0, future: 0 };
+  for (const group of groups) counts[group]++;
   return counts;
 }

@@ -16,15 +16,18 @@ import { parsePhaseFile } from '../../src/core/parser/phase.js';
 import { readRunLog } from '../../src/core/runlog/read.js';
 import { formatTime } from '../../src/client/format.js';
 import {
+  countGroups,
+  PHASE_FILTERS,
   phaseGroup,
   phaseGroupCounts,
   railView,
   runEnd,
   sprintCardState,
+  type PhaseFilter,
   type RailSprint,
   type RailView,
 } from '../../src/client/rail/derive.js';
-import { impliedPhase, phaseRow, phaseRows, runningPhase } from '../../src/client/list/derive.js';
+import { filterPhaseRows, impliedPhase, phaseRow, phaseRows, runningPhase } from '../../src/client/list/derive.js';
 import { notStartedTasks } from '../../src/client/data/status.js';
 import { phaseBadge, taskIcon } from '../../src/client/sprint/status.js';
 import { RUN_LOGS } from '../fixtures/index.js';
@@ -806,6 +809,38 @@ describe('filter groups', () => {
       [5, 'future', '0/2 tasks'],
       [6, 'progress', '0/2 tasks'],
       [7, 'progress', '0/2 tasks'],
+    ]);
+    // Counting the rows' groups gives the same counts.
+    expect(countGroups(phaseRows(project).map((r) => r.group))).toEqual(phaseGroupCounts(project));
+  });
+
+  it('counts groups, all zero with none', () => {
+    expect(countGroups(['future', 'complete', 'future'])).toEqual({ all: 3, progress: 0, complete: 1, future: 2 });
+    expect(countGroups([])).toEqual({ all: 0, progress: 0, complete: 0, future: 0 });
+  });
+
+  it('filters the phase rows by group, in phase order, keeping every row for All', () => {
+    const project = makeProject([
+      { n: 1, sprints: [['1.1', 'xx']] },
+      { n: 2, sprints: [['2.1', 'x-']] },
+      { n: 3, sprints: [['3.1', '--']] },
+      { n: 4, sprints: [['4.1', 'xM']] },
+    ]);
+    const rows = phaseRows(project);
+    const numbers = (show: PhaseFilter): number[] => filterPhaseRows(rows, show).map((r) => r.number);
+    expect(numbers('all')).toEqual([1, 2, 3, 4]);
+    expect(numbers('progress')).toEqual([2, 4]);
+    expect(numbers('complete')).toEqual([1]);
+    expect(numbers('future')).toEqual([3]);
+    expect(filterPhaseRows(rows.slice(0, 1), 'future')).toEqual([]);
+  });
+
+  it('lists the filters in menu order, with a line for each group nothing matches', () => {
+    expect(PHASE_FILTERS.map((f) => [f.key, f.label, f.empty])).toEqual([
+      ['all', 'All', null],
+      ['progress', 'In progress', 'No phases in progress'],
+      ['complete', 'Complete', 'No complete phases'],
+      ['future', 'Not started', 'No phases not started'],
     ]);
   });
 });

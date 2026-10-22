@@ -36,7 +36,7 @@ import { phaseLabel } from './data/status.js';
 import { useProjectStream } from './data/useProjectStream.js';
 import { impliedPhase } from './list/derive.js';
 import { ListView } from './list/ListView.js';
-import { paths, RouterProvider, useRouter, type Route } from './shell/router.js';
+import { paths, readShow, RouterProvider, useRouter, type Route } from './shell/router.js';
 import { ConnectionLost, Loading } from './shell/states.js';
 import { TopBar } from './shell/TopBar.js';
 import { Candidates } from './states/Candidates.js';
@@ -59,15 +59,16 @@ function projectWithPhases(snapshot: ViewerSnapshot | null): Project | null {
 
 function Viewer() {
   const { status, snapshot, lastUpdateAt } = useProjectStream();
-  const { route, navigate } = useRouter();
+  const { location, route, navigate } = useRouter();
   const project = projectWithPhases(snapshot);
 
-  // `/live` lands on a phase once there's data to pick one with.
+  // `/live` lands on a phase once there's data to pick one with, keeping the filter.
   useEffect(() => {
     if (route.name !== 'live' || !snapshot) return;
     const phase = project ? impliedPhase(project) : null;
-    navigate(phase === null ? paths.home() : paths.phase(phase), { replace: true });
-  }, [route, snapshot, project, navigate]);
+    const show = readShow(location.search);
+    navigate(phase === null ? paths.home(show) : paths.phase(phase, show), { replace: true });
+  }, [route, location.search, snapshot, project, navigate]);
 
   useEffect(() => {
     document.title = pageTitle(route, project);

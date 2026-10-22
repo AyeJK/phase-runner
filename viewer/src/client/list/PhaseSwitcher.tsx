@@ -3,10 +3,12 @@
  * switcher): below 720px it replaces the sidebar with a sticky bar under the
  * top bar. Its button names the selected phase ("Phase 8", the title, the
  * sidebar's end item, a chevron) and opens a sheet over the scrim holding the
- * same heading and rows as the sidebar ({@link PhaseList}).
+ * same heading, filter and rows as the sidebar ({@link PhaseList}). The
+ * button always names the selected phase, even when the filter hides its row.
  *
  * - Choosing a phase navigates and closes the sheet. A click on the scrim,
- *   Escape, or the switcher closes it too.
+ *   Escape, or the switcher closes it too. Choosing a filter keeps it open;
+ *   Escape with the filter's dropdown open closes only the dropdown.
  * - Opening moves focus to the selected row; closing returns it to the
  *   switcher. The page behind doesn't scroll while the sheet is open.
  * - The sheet's rows are only rendered while it's open, so the sidebar's rows
@@ -59,9 +61,12 @@ export function PhaseSwitcher({ rows, selected }: PhaseSwitcherProps) {
 
   useEffect(() => {
     if (!open) return;
-    // Focus the selected row (or the first).
+    // Focus the selected row, else the first row, else (the filter hides every row) the filter.
     const panel = panelRef.current;
-    const target = panel?.querySelector<HTMLElement>('[aria-current="page"]') ?? panel?.querySelector<HTMLElement>('a');
+    const target =
+      panel?.querySelector<HTMLElement>('[aria-current="page"]') ??
+      panel?.querySelector<HTMLElement>('a') ??
+      panel?.querySelector<HTMLElement>('button');
     target?.focus();
 
     // The page behind stays put.

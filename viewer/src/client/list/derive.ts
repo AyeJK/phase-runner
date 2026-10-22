@@ -11,7 +11,14 @@
 import type { Phase, Progress, Project } from '../../core/model.js';
 import { defaultPhase, notStartedTasks, phaseLabel, type NotStarted } from '../data/status.js';
 import { plural } from '../format.js';
-import { isActiveState, phaseGroup, sprintCardState, type PhaseGroup, type SprintState } from '../rail/derive.js';
+import {
+  isActiveState,
+  phaseGroup,
+  sprintCardState,
+  type PhaseFilter,
+  type PhaseGroup,
+  type SprintState,
+} from '../rail/derive.js';
 
 /** One sprint of a phase row. */
 export interface PhaseRowSprint {
@@ -91,6 +98,11 @@ export function phaseRow(project: Project, phase: Phase): PhaseRow {
 /** Every phase's row, in phase order. */
 export function phaseRows(project: Project): PhaseRow[] {
   return project.phases.map((phase) => phaseRow(project, phase));
+}
+
+/** The rows a filter shows: every row for All, else the rows in its group. */
+export function filterPhaseRows(rows: readonly PhaseRow[], show: PhaseFilter): readonly PhaseRow[] {
+  return show === 'all' ? rows : rows.filter((row) => row.group === show);
 }
 
 /** The first phase with a sprint in a gate state, or `null`. */

@@ -27,10 +27,10 @@
   border-right: 1px solid var(--border);
 }
 
-/* Heading line: "Phases" and "7 of 8 complete". */
+/* Heading line: "Phases" and the filter ("All 9"). */
 .side-h {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
   padding: 0 10px 10px;
@@ -40,6 +40,81 @@
 .side-h b {
   font-weight: 600;
   color: var(--text-2);
+}
+
+/* The filter: a quiet button in the heading's own type, and a dropdown like the settings menu's. */
+.ph-filter {
+  position: relative;
+}
+.ph-filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: -3px -4px -3px 0;
+  padding: 3px 2px 3px 6px;
+  font: inherit;
+  color: inherit;
+  white-space: nowrap;
+  background: none;
+  border: 0;
+  border-radius: var(--r);
+  cursor: pointer;
+}
+.ph-filter-btn svg {
+  width: 14px;
+  height: 14px;
+}
+.ph-filter-btn:hover,
+.ph-filter-btn[aria-expanded='true'] {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.ph-filter-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: -4px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 168px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r);
+  box-shadow: 0 8px 24px -8px var(--scrim);
+}
+.ph-filter-menu button {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 10px;
+  font: 500 13px var(--sans);
+  color: var(--text-2);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: calc(var(--r) - 2px);
+  cursor: pointer;
+}
+.ph-filter-menu button:hover,
+.ph-filter-menu button[aria-pressed='true'] {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.ph-filter-menu button:focus-visible {
+  outline-offset: -2px;
+}
+.ph-filter-count {
+  font: 500 12px var(--mono);
+  color: var(--text-3);
+}
+
+/* A filter no phase matches. */
+.phases-empty {
+  margin: 0;
+  padding: 8px 10px;
+  font: 400 13px var(--sans);
+  color: var(--text-3);
 }
 
 .phases {
@@ -213,7 +288,11 @@
     transform: rotate(180deg);
   }
 
-  /* The sheet: from under the switcher to the bottom of the screen, the scrim behind the panel. */
+  /*
+   * The sheet: from under the switcher to the bottom of the screen, the scrim
+   * behind the panel. The sheet scrolls rather than the panel, so the
+   * filter's dropdown can hang past a short panel over the scrim.
+   */
   .sheet:not([hidden]) {
     position: fixed;
     top: calc(var(--head) + 48px);
@@ -222,12 +301,11 @@
     left: 0;
     z-index: 3;
     display: block;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     background: var(--scrim);
   }
   .sheet-panel {
-    max-height: 100%;
-    overflow-y: auto;
-    overscroll-behavior: contain;
     padding: 8px 8px 16px;
     background: var(--surface);
     border-bottom: 1px solid var(--border-strong);

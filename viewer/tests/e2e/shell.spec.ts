@@ -14,7 +14,8 @@
  * - The phase sidebar and the phone switcher (Sprint 9.2) use a dev loop on
  *   a still copy of `multi-phase` with phase 1 retitled long enough to wrap
  *   (ports 4852 / 4853): phase 1 complete, phase 2 with a blocked task,
- *   phase 3 not started.
+ *   phase 3 not started. Its filter too; a filter nothing matches uses the
+ *   same fixture without phase 3 (ports 4854 / 4855).
  * - The connection test needs a server that stops and returns, so it starts
  *   its own dev loop on ports 4798 / 4799.
  */
@@ -169,7 +170,7 @@ test.describe('a still trail-log in a long-named folder', () => {
   test.describe('1280 px', () => {
     test.use({ viewport: { width: 1280, height: 900 } });
 
-    test('/ shows the list view on the default phase; no kanban, toggle or filters anywhere', async ({ page }) => {
+    test('/ shows the list view on the default phase; no kanban, toggle or filter row', async ({ page }) => {
       const implied = impliedPhase(project);
       expect(implied).not.toBeNull();
       const n = String(implied);
@@ -234,16 +235,21 @@ test.describe('a still trail-log in a long-named folder', () => {
     });
 
     test('old addresses land on their list routes', async ({ page }) => {
+      // The phase list's filter (`?show=`) comes along; any other query, or an unknown `show`, is dropped.
       const cases: Array<[from: string, to: string]> = [
         ['/list', '/'],
-        ['/list?show=progress', '/'],
-        ['/?show=complete', '/'],
+        ['/list?show=progress', '/?show=progress'],
+        ['/?show=complete', '/?show=complete'],
+        ['/?show=all', '/'],
+        ['/?show=bogus&x=1', '/'],
         ['/overview', '/'],
         ['/?phase=8', '/phase/8'],
         ['/?phase=2', '/phase/2'],
-        ['/list?phase=3&show=complete', '/phase/3'],
+        ['/list?phase=3&show=complete', '/phase/3?show=complete'],
+        ['/phase/2?x=1&show=future', '/phase/2?show=future'],
         ['/live?phase=1', '/phase/1'],
         ['/live', `/phase/${impliedPhase(project)}`],
+        ['/live?show=progress', `/phase/${impliedPhase(project)}?show=progress`],
       ];
       for (const [from, to] of cases) {
         await open(page, `${loop.baseURL}${from}`);
@@ -265,6 +271,11 @@ test.describe('a still trail-log in a long-named folder', () => {
       for (const from of ['/sprint/2.3', '/list?phase=2#s2.3']) {
         await open(page, `${loop.baseURL}${from}`);
         await expect(page).toHaveURL(`${loop.baseURL}/phase/2#s2.3`);
+        await expect(page.locator('article[data-sprint-card="2.3"]')).toHaveAttribute('data-open', 'true');
+      }
+      for (const from of ['/sprint/2.3?show=progress', '/list?phase=2&show=progress#s2.3']) {
+        await open(page, `${loop.baseURL}${from}`);
+        await expect(page).toHaveURL(`${loop.baseURL}/phase/2?show=progress#s2.3`);
         await expect(page.locator('article[data-sprint-card="2.3"]')).toHaveAttribute('data-open', 'true');
       }
     });
@@ -390,7 +401,7 @@ test.describe('phase sidebar and switcher', () => {
       expect(Math.round(sideBox.height)).toBe(900 - 56);
 
       await expect(side.locator('.side-h b')).toHaveText('Phases');
-      await expect(side.getByTestId('phases-complete')).toHaveText('1 of 3 complete');
+      await expect(side.getByTestId('phase-filter')).toHaveText('All 3');
       await expect(side.locator('a[data-phase-item]')).toHaveCount(3);
 
       // Phase 1, complete: a quiet grey check and no bar.
@@ -431,6 +442,85 @@ test.describe('phase sidebar and switcher', () => {
       await expect(page.getByTestId('list-main').getByTestId('phase-rail')).toHaveAttribute('data-phase', '3');
       await expect(p3).toHaveAttribute('aria-current', 'page');
       await expect(p2).not.toHaveAttribute('aria-current');
+    });
+
+    test('the filter: a quiet button in the heading line, a menu with counts, the choice in the URL', async ({ page }) => {
+      await open(page, `${loop.baseURL}/phase/2`);
+      const side = page.getByTestId('phase-sidebar');
+      const rail = page.getByTestId('list-main').getByTestId('phase-rail');
+      const rows = side.locator('a[data-phase-item]');
+
+      // "All 3" at the right of the heading line, in its 12px grey.
+      const filter = side.getByTestId('phase-filter');
+      await expect(filter).toHaveText('All 3');
+      await expect(filter).toHaveAccessibleName('Filter phases: All, 3');
+      await expect(filter).toHaveCSS('font-size', '12px');
+      await expect(filter).toHaveCSS('color', TEXT_3);
+      await expect(filter).toHaveAttribute('aria-expanded', 'false');
+      const head = (await side.locator('.side-h').boundingBox())!;
+      const btn = (await filter.boundingBox())!;
+      expect(btn.x + btn.width).toBeGreaterThan(head.x + head.width - 16);
+      const menu = side.getByTestId('phase-filter-menu');
+      await expect(menu).toHaveCount(0);
+
+      // Open: the four filters with their counts, All chosen and focused.
+      await filter.click();
+      await expect(filter).toHaveAttribute('aria-expanded', 'true');
+      await expect(filter).toHaveAttribute('aria-controls', (await menu.getAttribute('id'))!);
+      const choice = (key: string): Locator => menu.locator(`button[data-filter="${key}"]`);
+      await expect(menu.locator('button[data-filter]')).toHaveText([/^All\s*3$/, /^In progress\s*1$/, /^Complete\s*1$/, /^Not started\s*1$/]);
+      await expect(choice('all')).toHaveAttribute('aria-pressed', 'true');
+      await expect(choice('all')).toBeFocused();
+
+      // In progress: phase 2 only, in the URL, the menu closed and focus back on the button.
+      await choice('progress').click();
+      await expect(page).toHaveURL(`${loop.baseURL}/phase/2?show=progress`);
+      await expect(menu).toHaveCount(0);
+      await expect(filter).toBeFocused();
+      await expect(filter).toHaveText('In progress 1');
+      await expect(rows).toHaveCount(1);
+      await expect(phaseItem(side, 2)).toHaveAttribute('aria-current', 'page');
+
+      // Complete hides phase 2's row, but phase 2 stays on the right.
+      await filter.click();
+      await expect(choice('progress')).toHaveAttribute('aria-pressed', 'true');
+      await choice('complete').click();
+      await expect(page).toHaveURL(`${loop.baseURL}/phase/2?show=complete`);
+      await expect(rows).toHaveCount(1);
+      await expect(phaseItem(side, 1)).toBeVisible();
+      await expect(side.locator('a[aria-current="page"]')).toHaveCount(0);
+      await expect(rail).toHaveAttribute('data-phase', '2');
+
+      // Moving to another phase keeps the filter, and so does a reload.
+      await expect(phaseItem(side, 1)).toHaveAttribute('href', '/phase/1?show=complete');
+      await phaseItem(side, 1).click();
+      await expect(page).toHaveURL(`${loop.baseURL}/phase/1?show=complete`);
+      await expect(rail).toHaveAttribute('data-phase', '1');
+      await page.reload();
+      await expect(filter).toHaveText('Complete 1');
+      await expect(rows).toHaveCount(1);
+
+      // Escape closes the menu, focus back on the button.
+      await filter.click();
+      await expect(menu).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(menu).toHaveCount(0);
+      await expect(filter).toBeFocused();
+
+      // So does a click outside.
+      await filter.click();
+      await expect(menu).toBeVisible();
+      await page.getByTestId('list-main').click({ position: { x: 5, y: 5 } });
+      await expect(menu).toHaveCount(0);
+      await expect(filter).toBeFocused();
+      await expect(page).toHaveURL(`${loop.baseURL}/phase/1?show=complete`);
+
+      // All takes the query off and shows every row.
+      await filter.click();
+      await choice('all').click();
+      await expect(page).toHaveURL(`${loop.baseURL}/phase/1`);
+      await expect(filter).toHaveText('All 3');
+      await expect(rows).toHaveCount(3);
     });
   });
 
@@ -481,7 +571,7 @@ test.describe('phase sidebar and switcher', () => {
       await expect(sw).toHaveAttribute('aria-controls', (await sheet.getAttribute('id'))!);
       await expect(sheet).toBeVisible();
       expect(Math.round((await sheet.boundingBox())!.y)).toBe(100);
-      await expect(sheet.getByTestId('phases-complete')).toHaveText('1 of 3 complete');
+      await expect(sheet.getByTestId('phase-filter')).toHaveText('All 3');
       await expect(sheet.locator('a[data-phase-item]')).toHaveCount(3);
       await expect(sheet.locator('.ph-t')).toHaveText([LONG_TITLE, 'Library UI', 'Sharing']);
       await expect(sheet.locator('.ph').first()).toHaveCSS('padding-top', '12px');
@@ -537,9 +627,57 @@ test.describe('phase sidebar and switcher', () => {
       await expect(sw).toHaveAttribute('aria-expanded', 'false');
       await expect(sw).toBeFocused();
     });
+
+    test('the sheet has the same filter; choosing one keeps the sheet open and the switcher on the selected phase', async ({ page }) => {
+      await open(page, `${loop.baseURL}/phase/2`);
+      const sw = page.getByTestId('phase-switcher');
+      const sheet = page.getByTestId('phase-sheet');
+      await sw.click();
+      const filter = sheet.getByTestId('phase-filter');
+      const menu = sheet.getByTestId('phase-filter-menu');
+      await expect(filter).toHaveText('All 3');
+
+      // The menu hangs inside the screen, over the sheet; Escape closes only the menu.
+      await filter.click();
+      await expect(menu).toBeVisible();
+      const box = (await menu.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(375);
+      expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+      await page.keyboard.press('Escape');
+      await expect(menu).toHaveCount(0);
+      await expect(sheet).toBeVisible();
+      await expect(filter).toBeFocused();
+
+      // Not started: only phase 3 in the sheet, the sheet still open, the switcher still on phase 2.
+      await filter.click();
+      await menu.locator('button[data-filter="future"]').click();
+      await expect(page).toHaveURL(`${loop.baseURL}/phase/2?show=future`);
+      await expect(sheet).toBeVisible();
+      await expect(filter).toHaveText('Not started 1');
+      await expect(sheet.locator('a[data-phase-item]')).toHaveCount(1);
+      await expect(phaseItem(sheet, 3)).toBeVisible();
+      await expect(sw.locator('.n')).toHaveText('Phase 2');
+      await expect(sw.locator('.t')).toHaveText('Library UI');
+      await expect(page.getByTestId('list-main').getByTestId('phase-rail')).toHaveAttribute('data-phase', '2');
+      expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+
+      // Closed and opened again, the filter holds and focus lands on the first row shown.
+      await page.keyboard.press('Escape');
+      await expect(sheet).toBeHidden();
+      await sw.click();
+      await expect(sheet.locator('a[data-phase-item]')).toHaveCount(1);
+      await expect(phaseItem(sheet, 3)).toBeFocused();
+
+      // Choosing it shows phase 3, keeping the filter.
+      await phaseItem(sheet, 3).click();
+      await expect(page).toHaveURL(`${loop.baseURL}/phase/3?show=future`);
+      await expect(sheet).toBeHidden();
+      await expect(sw.locator('.n')).toHaveText('Phase 3');
+    });
   });
 
-  test('no sideways strip and no horizontal page scroll at 375 and 719 px, sheet open or closed', async ({ page }) => {
+  test('no sideways strip and no horizontal page scroll at 375 and 719 px, sheet and filter menu open or closed', async ({ page }) => {
     for (const width of [375, 719]) {
       await page.setViewportSize({ width, height: 800 });
       await open(page, `${loop.baseURL}/phase/2`);
@@ -549,8 +687,65 @@ test.describe('phase sidebar and switcher', () => {
       await page.getByTestId('phase-switcher').click();
       await expect(page.getByTestId('phase-sheet')).toBeVisible();
       expect(await horizontalOverflow(page), `${width}px, sheet open`).toBeLessThanOrEqual(0);
+      await page.getByTestId('phase-sheet').getByTestId('phase-filter').click();
+      await expect(page.getByTestId('phase-filter-menu')).toBeVisible();
+      expect(await horizontalOverflow(page), `${width}px, filter menu open`).toBeLessThanOrEqual(0);
       await page.keyboard.press('Escape');
+      await page.keyboard.press('Escape');
+      await expect(page.getByTestId('phase-sheet')).toBeHidden();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A filter nothing matches (a still multi-phase copy without phase 3)
+// ---------------------------------------------------------------------------
+
+test.describe('a filter with no phases', () => {
+  let loop: Harness;
+  let source: string;
+
+  test.beforeAll(async () => {
+    test.setTimeout(60_000);
+    source = await mkdtemp(path.join(os.tmpdir(), 'phase-viewer-filter-'));
+    const named = path.join(source, 'multi-phase');
+    await cp(MULTI_PHASE, named, { recursive: true });
+    await rm(path.join(named, 'docs/phases/Phase-3-Sharing.md'));
+    loop = await startHarness({ clientPort: 4854, serverPort: 4855, source: named, freshness: 'as-is' });
+  });
+
+  test.afterAll(async () => {
+    await loop?.close();
+    if (source) await rm(source, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  });
+
+  test('shows one grey line in the sidebar and in the sheet, and the phase stays on the right', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await open(page, `${loop.baseURL}/phase/2?show=future`);
+    const side = page.getByTestId('phase-sidebar');
+    await expect(side.getByTestId('phase-filter')).toHaveText('Not started 0');
+    await expect(side.locator('a[data-phase-item]')).toHaveCount(0);
+    const empty = side.getByTestId('phases-empty');
+    await expect(empty).toHaveText('No phases not started');
+    await expect(empty).toHaveCSS('font-size', '13px');
+    await expect(empty).toHaveCSS('color', TEXT_3);
+    await expect(page.getByTestId('list-main').getByTestId('phase-rail')).toHaveAttribute('data-phase', '2');
+
+    // A filter with a match shows its rows and no line.
+    await open(page, `${loop.baseURL}/phase/2?show=complete`);
+    await expect(side.locator('a[data-phase-item]')).toHaveCount(1);
+    await expect(side.getByTestId('phases-empty')).toHaveCount(0);
+
+    // The sheet at 375 px: the same line, and focus on the filter with no row to land on.
+    await page.setViewportSize({ width: 375, height: 812 });
+    await open(page, `${loop.baseURL}/phase/2?show=future`);
+    await page.getByTestId('phase-switcher').click();
+    const sheet = page.getByTestId('phase-sheet');
+    await expect(sheet.getByTestId('phases-empty')).toHaveText('No phases not started');
+    await expect(sheet.getByTestId('phase-filter')).toBeFocused();
+    await expect(page.getByTestId('phase-switcher').locator('.n')).toHaveText('Phase 2');
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
   });
 });
 

@@ -20,7 +20,10 @@
  * | `/list`, `/list?…` without a phase, `/overview` | `/` |
  * | `/sprint/:id` | `/phase/{n}#s{id}` |
  *
- * Any other query (the old filter row's `?show=`) is dropped.
+ * `?show=progress | complete | future` is the phase list's filter (no `show`
+ * is All). It's kept on `/` and `/phase/N`, through every redirect above and
+ * by the phase rows' links; any other query, or an unknown `show`, is
+ * dropped.
  *
  * Hash-only links (`#s2.3` on the rail) are left to the browser, which jumps
  * to the element without a navigation; `hashchange` keeps `hash` here in
@@ -38,6 +41,7 @@ import {
   type ReactNode,
 } from 'react';
 import { phaseOfSprintId } from '../data/status.js';
+import { PHASE_FILTERS, type PhaseFilter } from '../rail/derive.js';
 
 /** A matched route. */
 export type Route =
@@ -86,25 +90,39 @@ function readPhase(search: string): number | null {
   return raw !== null && /^\d+$/.test(raw) ? Number(raw) : null;
 }
 
+const FILTERS: ReadonlySet<string> = new Set(PHASE_FILTERS.map((f) => f.key).filter((key) => key !== 'all'));
+
+/** A `?show=` value; anything unknown (or none) is All. */
+export function readShow(search: string): PhaseFilter {
+  const raw = new URLSearchParams(search).get('show');
+  return raw !== null && FILTERS.has(raw) ? (raw as PhaseFilter) : 'all';
+}
+
+/** The query for a filter: `?show=progress`, or nothing for All. */
+function showSearch(show: PhaseFilter): string {
+  return show === 'all' ? '' : `?show=${show}`;
+}
+
 /**
  * Where an old route now lives, or `null` when `location` is already where it
  * belongs (or is a `/live` with no phase, which App redirects once the
- * snapshot is here).
+ * snapshot is here). A known `?show=` comes along.
  */
 export function redirectPath(location: Location): string | null {
   const path = cleanPath(location.pathname);
   const { search, hash } = location;
-  if (path === '/overview') return paths.home();
+  const show = readShow(search);
+  if (path === '/overview') return paths.home(show);
   if (path === '/' || path === '/list' || path === '/live') {
     const phase = readPhase(search);
-    if (phase !== null) return `${paths.phase(phase)}${hash}`;
+    if (phase !== null) return `${paths.phase(phase, show)}${hash}`;
     if (path === '/live') return null;
-    return path === '/list' || search !== '' ? `${paths.home()}${hash}` : null;
+    return path === '/list' || search !== showSearch(show) ? `${paths.home(show)}${hash}` : null;
   }
   const phase = /^\/phase\/(\d+)$/.exec(path);
   if (phase) {
-    const to = paths.phase(Number(phase[1]));
-    return search !== '' || path !== location.pathname ? `${to}${hash}` : null;
+    const to = paths.phase(Number(phase[1]), show);
+    return search !== showSearch(show) || path !== location.pathname ? `${to}${hash}` : null;
   }
   const sprint = /^\/sprint\/([^/]+)$/.exec(path);
   if (sprint) {
@@ -114,7 +132,7 @@ export function redirectPath(location: Location): string | null {
     } catch {
       return null;
     }
-    return phaseOfSprintId(id) === null ? null : paths.sprint(id);
+    return phaseOfSprintId(id) === null ? null : paths.sprint(id, show);
   }
   return null;
 }
@@ -176,14 +194,14 @@ export function useRouter(): RouterValue {
 
 /** Paths for each route, so links are written one way. */
 export const paths = {
-  /** The list view on the running phase, else the default one. */
-  home: (): string => '/',
-  /** The list view on phase n. */
-  phase: (n: number): string => `/phase/${n}`,
+  /** The list view on the running phase, else the default one, with the phase list filtered by `show`. */
+  home: (show: PhaseFilter = 'all'): string => `/${showSearch(show)}`,
+  /** The list view on phase n, with the phase list filtered by `show`. */
+  phase: (n: number, show: PhaseFilter = 'all'): string => `/phase/${n}${showSearch(show)}`,
   /** A sprint: its phase, landing on the sprint's card. */
-  sprint: (id: string): string => {
+  sprint: (id: string, show: PhaseFilter = 'all'): string => {
     const n = phaseOfSprintId(id);
-    return n === null ? '/' : `${paths.phase(n)}#${paths.sprintSection(encodeURIComponent(id))}`;
+    return n === null ? paths.home(show) : `${paths.phase(n, show)}#${paths.sprintSection(encodeURIComponent(id))}`;
   },
   /** The id of a sprint's card on the rail (`s2.3`). */
   sprintSection: (id: string): string => `s${id}`,
