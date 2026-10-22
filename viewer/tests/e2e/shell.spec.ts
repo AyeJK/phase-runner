@@ -391,7 +391,8 @@ test.describe('a still trail-log in a long-named folder', () => {
 /** Phase 1's title in the copy: long enough to wrap in the 232px sidebar. */
 const LONG_TITLE = 'Overview, Sprint Detail and States';
 
-/** Dark theme `--passed`, the colour the checks read (design-system.md "Viewer tokens"). */
+/** Dark theme colours the checks read (design-system.md "Viewer tokens"). */
+const TEXT_3 = 'rgb(138, 131, 122)';
 const PASSED = 'rgb(76, 212, 128)';
 
 /** The phase row for phase n inside `scope` (the sidebar or the sheet). */
