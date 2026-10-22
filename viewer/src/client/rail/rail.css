@@ -52,8 +52,19 @@
   font-size: 13px;
   color: var(--text-2);
 }
-.meta > span {
+.meta > span,
+.meta-next > span {
   min-width: 0;
+}
+/* A dot and the item after it: they wrap together, so no line ends on a dot. */
+.meta-next {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* A long branch name breaks rather than pushing the page sideways. */
+.meta-worktree {
+  overflow-wrap: anywhere;
 }
 .meta .sep,
 .wave-h .sep {
@@ -82,8 +93,8 @@
 .meta-state.manual {
   color: var(--manual);
 }
-/* Not started, Waiting (and Deferred, Cut): plain grey words, no icon. */
-.meta-state.tag,
+/* Not started, Waiting (and Deferred, Cut): plain grey words, no icon, no box. */
+.meta-state.plain,
 .meta-state.fail {
   font-weight: 500;
   color: var(--text-3);

@@ -14,6 +14,7 @@
  * | `mixed-symbols`  | Status cells `[x]`, `[X]`, `[ ]`, `-`, `–`, `—`, `X`, `blocked`, `Cut`, `deferred`, and `WIP` (→ `unknown`). Headers with en dash (phase + 1.1), colon (1.2) and hyphen (1.3). Checkbox and `*` acceptance bullets. Mixed-case Verification keys in 1.2 (`CLI:`, `Skip-UI: TRUE`). |
  * | `broken`         | See {@link BROKEN_LINES}. Contains real NUL and invalid UTF-8 bytes; `.gitattributes` marks it binary. |
  * | `trail-log`      | The dev / e2e fixture that `scripts/simulate-run.ts` plays a live run on. 3 phases, 8 sprints, run logs for phases 1 and 2. See {@link TRAIL_LOG}. |
+ * | `worktree-run`   | `trail-log` as a git repo with phase 2 running in a linked worktree. The main checkout has phases 1–3, phase 2 with nothing done and no log. `dot-git/` is the synthetic `.git` (main on `main`, worktree `phase-2-trip-journal` on `claude/phase-2-trip-journal`) and `worktrees/phase-2-trip-journal/` its checkout, with phases 1–2 (2.1 done) and phase 2's log. Only usable as a copy: `prepareFixture` renames `dot-git/` and writes the path files (`linkWorktrees` in `scripts/simulate-run.ts`). |
  *
  * {@link RUN_LOGS} holds standalone `.jsonl` run logs: two real ones
  * (`realSmoke`, `realPhase1`) and synthetic ones for each shape the reader and

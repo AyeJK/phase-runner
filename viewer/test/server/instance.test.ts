@@ -49,7 +49,14 @@ function project(name: string): string {
 async function cli(argv: string[], cwd: string = tmp) {
   const out: string[] = [];
   const err: string[] = [];
-  const io: CliIo = { cwd, stdout: (text) => out.push(text), stderr: (text) => err.push(text), instanceDir: dir };
+  const io: CliIo = {
+    cwd,
+    stdout: (text) => out.push(text),
+    stderr: (text) => err.push(text),
+    instanceDir: dir,
+    // Keep the `.git` walk inside the temp dir, whatever sits above it on this machine.
+    worktrees: { ceiling: tmp },
+  };
   const result = await runCli(argv, io);
   running.push(result);
   return { result, out, err };
@@ -174,6 +181,65 @@ describe('reuse', () => {
     const againB = await cli(['--dir', b, '--json']);
     expect(JSON.parse(againA.out[0]!)).toEqual({ url: `http://localhost:${runA.result.server!.port}`, reused: true, root: a });
     expect(JSON.parse(againB.out[0]!)).toEqual({ url: `http://localhost:${runB.result.server!.port}`, reused: true, root: b });
+  });
+});
+
+describe('from a git worktree', () => {
+  /**
+   * A main checkout `{tmp}/repo` (a `.git` folder) with one linked worktree at
+   * `repo/.claude/worktrees/phase-33-watching-now-e0037f`, laid out the way
+   * git writes it (no git binary). Both have `docs/phases/`.
+   */
+  function repoWithWorktree() {
+    const main = project('repo');
+    const common = path.join(main, '.git');
+    const name = 'phase-33-watching-now-e0037f';
+    const entry = path.join(common, 'worktrees', name);
+    const wt = path.join(main, '.claude', 'worktrees', name);
+    mkdirSync(entry, { recursive: true });
+    mkdirSync(path.join(wt, 'docs', 'phases'), { recursive: true });
+    writeFileSync(path.join(common, 'HEAD'), 'ref: refs/heads/master\n');
+    writeFileSync(path.join(entry, 'gitdir'), `${path.join(wt, '.git')}\n`);
+    writeFileSync(path.join(entry, 'commondir'), '../..\n');
+    writeFileSync(path.join(entry, 'HEAD'), `ref: refs/heads/claude/${name}\n`);
+    writeFileSync(path.join(wt, '.git'), `gitdir: ${entry}\n`);
+    return { main, wt };
+  }
+
+  it("starting inside a worktree reports the main checkout's viewer and writes no second instance file", async () => {
+    const { main, wt } = repoWithWorktree();
+    const port = await deadPort();
+    const first = await cli(['--dir', main, '--port', String(port)]);
+    expect(first.result.server?.port).toBe(port);
+
+    // Detected from the worktree's folder, and named with --dir: both reuse the main viewer.
+    const detected = await cli(['--json'], wt);
+    expect(detected.result.server).toBeUndefined();
+    expect(JSON.parse(detected.out[0]!)).toEqual({ url: `http://localhost:${port}`, reused: true, root: main });
+    const named = await cli(['--dir', wt, '--json']);
+    expect(JSON.parse(named.out[0]!)).toEqual({ url: `http://localhost:${port}`, reused: true, root: main });
+
+    expect(readdirSync(dir)).toEqual([`${instanceKey(main)}.json`]);
+  });
+
+  it('with no viewer running, starting inside a worktree starts the main checkout\'s viewer', async () => {
+    const { main, wt } = repoWithWorktree();
+    const run = await cli(['--json'], wt);
+    expect(run.result.server).toBeDefined();
+    expect(JSON.parse(run.out[0]!)).toMatchObject({ reused: false, root: main });
+    expect(readInstance(main, dir)).toMatchObject({ root: main });
+    expect(readdirSync(dir)).toEqual([`${instanceKey(main)}.json`]);
+
+    // The main checkout then finds that same viewer.
+    const again = await cli(['--dir', main, '--json']);
+    expect(JSON.parse(again.out[0]!)).toEqual({ url: `http://localhost:${run.result.server!.port}`, reused: true, root: main });
+  });
+
+  it('a worktree whose main checkout has no docs/phases/ keeps its own root', async () => {
+    const { main, wt } = repoWithWorktree();
+    rmSync(path.join(main, 'docs'), { recursive: true, force: true });
+    const run = await cli(['--json'], wt);
+    expect(JSON.parse(run.out[0]!)).toMatchObject({ reused: false, root: wt });
   });
 });
 

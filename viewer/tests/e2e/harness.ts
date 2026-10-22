@@ -13,10 +13,17 @@
  * To play a run on cue, append steps to `fixture.root` with `writeStep` from
  * `scripts/simulate-run.ts` (as `rail.spec.ts` does).
  *
+ * A fixture with a `dot-git/` folder (`worktree-run`) is copied as a repo
+ * with linked git worktrees: `prepareFixture` renames `dot-git/` to `.git`,
+ * writes each worktree's `gitdir` and `.git` files with paths into the copy,
+ * and sets its `commondir` mtime (its creation time) just before its first
+ * logged event (`linkWorktrees`). `fixture.worktrees` lists them; append
+ * steps to a worktree with `writeStep(worktree.root, …)`.
+ *
  * Ports in use (each test its own pair, all clear of the shared `webServer`
- * on 4790 / 4791): `shell.spec.ts` 4798–4799 and 4850–4853,
+ * on 4790 / 4791): `shell.spec.ts` 4798–4799 and 4850–4855,
  * `sprint.spec.ts` 4810–4811, `states.spec.ts` 4830–4835, `rail.spec.ts`
- * 4840–4847.
+ * 4840–4849.
  */
 import { fileURLToPath } from 'node:url';
 import { createServer as createViteServer, type ViteDevServer } from 'vite';

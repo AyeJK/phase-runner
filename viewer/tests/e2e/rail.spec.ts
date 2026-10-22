@@ -19,9 +19,14 @@
  * - A `trail-log` copy with the `escalation` script appended: the escalation
  *   banner under the meta line, cleared by a later event (Live run's
  *   check, moved here in Sprint 7.4).
+ * - The `worktree-run` fixture (Sprint 10.3): phase 2 runs in a linked git
+ *   worktree, so the page shows the worktree's phase file and run log, with
+ *   "Worktree {branch}" last on the meta line (the path as its tooltip);
+ *   phase 1, from the main checkout, has no such item. An event appended to
+ *   the worktree's log shows live, and at 375 px the meta line wraps.
  * - 375 px on the shared `webServer`.
  *
- * Ports: 4840–4847 (see `harness.ts`).
+ * Ports: 4840–4849 (see `harness.ts`).
  */
 import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -628,6 +633,122 @@ test.describe('an escalation', () => {
     } finally {
       await harness.close();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// worktree-run: phase 2 running in a linked git worktree
+// ---------------------------------------------------------------------------
+
+test.describe('a phase running in a git worktree', () => {
+  let loop: Harness;
+
+  test.beforeAll(async () => {
+    loop = await startHarness({ clientPort: 4848, serverPort: 4849, fixture: 'worktree-run', freshness: 'fresh' });
+  });
+  test.afterAll(async () => {
+    await loop?.close();
+  });
+
+  function worktree() {
+    const wt = loop.fixture.worktrees[0];
+    expect(wt?.name).toBe('phase-2-trip-journal');
+    return wt!;
+  }
+
+  test('phase 2 shows the worktree\'s run and statuses, and "Worktree {branch}" last on the meta line', async ({ page }) => {
+    const wt = worktree();
+    await open(page, `${loop.baseURL}/phase/2`);
+
+    // The worktree's phase file (2.1 done) and run log (wave 1), not the main checkout's (nothing done, no log).
+    await expect(page.getByTestId('phase-progress-text')).toHaveText('3 of 12 tasks');
+    await expect(page.getByTestId('rail-summary')).not.toHaveText('No run log');
+    expect(await attrs(page.locator('section[data-rail-row]'), 'data-rail-row')).toEqual(['wave-1-1', 'not-run']);
+    await expect(railRow(page, 'wave-1-1')).toHaveAttribute('data-row-state', 'done');
+    await expect(badge(page, '2.1')).toHaveText('Complete');
+    await expect(badge(page, '2.2')).toHaveText('Not started');
+
+    // The worktree item: last, the branch, the full path as its tooltip, in the meta line's own text style.
+    const item = page.getByTestId('phase-worktree');
+    await expect(item).toHaveText('Worktree claude/phase-2-trip-journal');
+    await expect(item).toHaveAttribute('title', wt.root);
+    await expect(page.getByTestId('phase-meta').locator(':scope > span').last().getByTestId('phase-worktree')).toHaveCount(1);
+    await expect(page.getByTestId('phase-meta')).toHaveText(/·Worktree claude\/phase-2-trip-journal$/);
+    const tasks = page.getByTestId('phase-progress-text');
+    for (const prop of ['color', 'fontSize', 'fontWeight', 'fontFamily']) {
+      expect(await css(item, prop)).toBe(await css(tasks, prop));
+    }
+    await expect(item.locator('svg')).toHaveCount(0);
+
+    // Some tasks done, nothing running: the plain grey word, no icon and no box.
+    const state = page.getByTestId('phase-status');
+    await expect(state).toHaveText('Waiting');
+    await expect(state.locator('svg')).toHaveCount(0);
+    expect(await css(state, 'borderTopStyle')).toBe('none');
+    expect(await css(state, 'textTransform')).toBe('none');
+    expect(await css(state, 'fontSize')).toBe(await css(tasks, 'fontSize'));
+    expect(await css(state, 'fontFamily')).toBe(await css(tasks, 'fontFamily'));
+
+    // Nothing about worktrees anywhere else (the sidebar, the switcher). The
+    // project name in the top bar, "worktree-run", is the fixture's folder.
+    expect((await page.locator('body').innerText()).match(/Worktree /g)).toHaveLength(1);
+  });
+
+  test('a phase from the main checkout has no worktree item', async ({ page }) => {
+    await open(page, `${loop.baseURL}/phase/1`);
+    await expect(page.getByTestId('phase-status')).toHaveText('Complete');
+    await expect(page.getByTestId('phase-meta')).toBeVisible();
+    await expect(page.getByTestId('phase-worktree')).toHaveCount(0);
+    expect((await page.locator('body').innerText()).match(/Worktree /g)).toBeNull();
+  });
+
+  test('at 375 px the meta line wraps, with no horizontal page scroll', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await open(page, `${loop.baseURL}/phase/2`);
+    const item = page.getByTestId('phase-worktree');
+    await expect(item).toBeVisible();
+    const first = await page.getByTestId('phase-status').boundingBox();
+    const last = await item.boundingBox();
+    expect(first && last).toBeTruthy();
+    // On a later line than the first item, inside the 16 px gutters.
+    expect(last!.y).toBeGreaterThan(first!.y);
+    expect(last!.x + last!.width).toBeLessThanOrEqual(375 - 15);
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    // No line ends on a dot: each dot shares its line with the item after it.
+    const onItemLine = await page.getByTestId('phase-meta').locator('.sep').evaluateAll((els) =>
+      els.map((sep) => {
+        const next = sep.nextElementSibling?.getBoundingClientRect();
+        const dot = sep.getBoundingClientRect();
+        const mid = dot.top + dot.height / 2;
+        return next !== undefined && mid > next.top && mid < next.bottom;
+      }),
+    );
+    expect(onItemLine.length).toBeGreaterThan(0);
+    expect(onItemLine.every(Boolean)).toBe(true);
+  });
+
+  test("appending to the worktree's run log updates the page live", async ({ page }) => {
+    const wt = worktree();
+    await open(page, `${loop.baseURL}/phase/2`);
+    await expect(badge(page, '2.2')).toHaveText('Not started');
+
+    const marker = JSON.stringify({
+      v: 1,
+      ts: formatTs(new Date()),
+      phase: 2,
+      wave: 2,
+      sprint: '2.2',
+      gate: 'implement',
+      result: 'start',
+      attempt: 1,
+      max: 3,
+      summary: '',
+    });
+    await appendFile(path.join(wt.runsDir, 'phase-2.jsonl'), `${marker}\n`, 'utf8');
+    await expect(badge(page, '2.2')).toHaveText('Implementing', { timeout: APPEAR_MS });
+    await expect(railRow(page, 'wave-1-2')).toHaveAttribute('data-row-state', 'running', { timeout: APPEAR_MS });
+    // Still shown from the worktree.
+    await expect(page.getByTestId('phase-worktree')).toHaveText('Worktree claude/phase-2-trip-journal');
   });
 });
 

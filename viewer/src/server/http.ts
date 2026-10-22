@@ -9,18 +9,21 @@
  * | `GET /api/…` other | 404 JSON |
  * | `GET` anything else| A file from `dist/client/`, else `index.html` (SPA fallback). A placeholder page while the client isn't built. |
  *
- * On start it loads the project into a {@link ProjectState}, starts the file
- * watcher and waits for its first scan, then binds the first free port with
- * {@link listenOnFreePort}. Each settled file change is applied to the state
- * and its updates are broadcast to every open event stream. When the
+ * On start it loads the project from every checkout of its git repo into a
+ * {@link CheckoutSet} (`checkouts.ts`: the main checkout plus each linked
+ * worktree, merged phase by phase; just the project folder when there are no
+ * worktrees or no repo), starts the file watchers and waits for their first
+ * scan, then binds the first free port with {@link listenOnFreePort}. Each
+ * settled file change is applied to the set, as is each worktree appearing or
+ * going, and the updates are broadcast to every open event stream. When the
  * workspace has no resolved root (detection found nothing, or several
  * candidates) the server still starts: the snapshot carries the workspace
  * with `project: null`, and no watcher runs.
  *
  * Read-only guarantee: only GET and HEAD are accepted (anything else is 405
  * with `Allow: GET, HEAD`), there are no write endpoints, and no code path
- * here writes to disk. The project folder is only read (through `state.ts`
- * and `watch.ts`); static files are only read from the client folder, and a
+ * here writes to disk. The project folder and the git folder are only read
+ * (through `checkouts.ts`, `state.ts`, `watch.ts` and `worktrees.ts`); static files are only read from the client folder, and a
  * request path that resolves outside it is refused.
  */
 import { createReadStream, readFileSync } from 'node:fs';
@@ -31,8 +34,8 @@ import { fileURLToPath } from 'node:url';
 import type { RunningServer, StartServerOptions } from '../cli.js';
 import { listenOnFreePort } from './port.js';
 import { createEventHub, type ViewerSnapshot } from './sse.js';
-import { createProjectState, type ProjectState } from './state.js';
-import { watchProject, type ProjectWatcher } from './watch.js';
+import { createCheckoutSet, watchCheckouts, type CheckoutSet } from './checkouts.js';
+import type { ProjectWatcher } from './watch.js';
 
 export type { ViewerSnapshot } from './sse.js';
 
@@ -101,18 +104,16 @@ export async function startViewerServer(options: ViewerServerOptions): Promise<V
   const pkg = readPackage();
   const hub = createEventHub({ heartbeatMs: options.heartbeatMs });
 
-  let state: ProjectState | null = null;
+  let state: CheckoutSet | null = null;
   let watcher: ProjectWatcher | null = null;
   if (workspace.kind === 'found') {
-    const live = await createProjectState(workspace.root);
+    const live = await createCheckoutSet(workspace.root);
     state = live;
-    watcher = watchProject(
-      live.root,
-      (change) => {
-        void live.apply(change).then((updates) => hub.broadcast(updates));
-      },
-      { debounceMs: options.debounceMs, usePolling: options.usePolling, onError: options.onWatchError },
-    );
+    watcher = watchCheckouts(live, (updates) => hub.broadcast(updates), {
+      debounceMs: options.debounceMs,
+      usePolling: options.usePolling,
+      onError: options.onWatchError,
+    });
     await readyOrTimeout(watcher.ready, WATCH_READY_TIMEOUT_MS);
   }
 

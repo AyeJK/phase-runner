@@ -1,0 +1,9 @@
+{"v":1,"ts":"2026-09-27T14:02:11Z","phase":1,"wave":1,"sprint":"1.1","gate":"implement","result":"pass","attempt":1,"max":3,"summary":"done 1,2,3 — Tables and repository in src/db/; migration runner is a plain SQL folder"}
+{"v":1,"ts":"2026-09-27T14:03:40Z","phase":1,"wave":1,"sprint":"1.1","gate":"verify","result":"pass","attempt":1,"max":3,"summary":"criteria 2/2 met"}
+{"v":1,"ts":"2026-09-27T14:05:02Z","phase":1,"wave":1,"sprint":"1.1","gate":"doc_sync","result":"pass","attempt":1,"max":1,"summary":"3 tasks updated","files":["src/db/migrate.ts","src/db/migrations/001-trips.sql","src/db/trips.ts","src/db/trips.test.ts"]}
+{"v":1,"ts":"2026-09-27T14:21:37Z","phase":1,"wave":2,"sprint":"1.2","gate":"implement","result":"pass","attempt":1,"max":3,"summary":"done 1,2,3 — Shell and trip list"}
+{"v":1,"ts":"2026-09-27T14:22:58Z","phase":1,"wave":2,"sprint":"1.2","gate":"verify","result":"fail","attempt":1,"max":3,"summary":"typecheck: 1 error in src/trips/TripList.tsx"}
+{"v":1,"ts":"2026-09-27T14:27:14Z","phase":1,"wave":2,"sprint":"1.2","gate":"implement","result":"pass","attempt":2,"max":3,"summary":"done 1,2,3 — Retry 1. Typed the sort key."}
+{"v":1,"ts":"2026-09-27T14:28:30Z","phase":1,"wave":2,"sprint":"1.2","gate":"verify","result":"pass","attempt":2,"max":3,"summary":"criteria 2/2 met"}
+{"v":1,"ts":"2026-09-27T14:32:05Z","phase":1,"wave":2,"sprint":"1.2","gate":"wave_test","result":"pass","attempt":1,"max":3,"summary":"1 URLs, 3 viewports"}
+{"v":1,"ts":"2026-09-27T14:33:19Z","phase":1,"wave":2,"sprint":"1.2","gate":"doc_sync","result":"pass","attempt":1,"max":1,"summary":"3 tasks updated","files":["src/shell/TopBar.tsx","src/trips/TripList.tsx","src/trips/TripList.css"]}

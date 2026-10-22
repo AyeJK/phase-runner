@@ -16,6 +16,7 @@ The gate agents and the implementation agents write it; the orchestrator never d
 - The dot folder keeps it out of phase-builder's `Phase-{N}-*.md` glob.
 - Append-only. Nothing edits or rewrites a line once it's written.
 - Recommend `docs/phases/.runs/` in the project's `.gitignore`. The log is run noise, and ignoring it keeps it out of verify's wave diff. phase-verify never flags it either way.
+- When a phase runs in a git worktree (worktree mode, or a desktop side session), the log is written inside the worktree, like the phase-file edits. The viewer (phase-viewer 0.6.0 and later) reads every git worktree's logs too, so a worktree run shows live from the main checkout's viewer until the branch is merged. Nothing changes in how the log is written.
 
 ---
 

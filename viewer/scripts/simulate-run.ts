@@ -14,7 +14,9 @@
  *    every `ts` in its run logs so the latest event is recent (`fresh`, 90 s
  *    ago) or old (`stale`, 3 h ago). Relative gaps between events are kept.
  *    With `--from`, it copies that project's `docs/` instead, into a folder
- *    named after the project.
+ *    named after the project. A fixture with a `dot-git/` folder (a synthetic
+ *    git folder, which can't be checked in as `.git`) becomes a repo with
+ *    linked worktrees: see {@link linkWorktrees}.
  * 2. {@link simulateRun} appends a scripted sequence of run-log v1 events
  *    (see `plugin/skills/phase-builder/run-log.md`) at a fixed interval, each
  *    stamped with the current time, the way the gate agents would. When a
@@ -61,7 +63,7 @@
  * (`npm run serve -- --dir <folder>`), plays the script, and removes the copy
  * on Ctrl+C unless `--keep` is given.
  */
-import { appendFile, cp, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { appendFile, cp, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -371,6 +373,8 @@ export interface PreparedFixture {
   runsDir: string;
   /** The project folder's name (the fixture's, or the source project's), which the viewer shows as the project name. */
   name: string;
+  /** Linked worktrees set up by {@link linkWorktrees}, by name; empty for a fixture without `dot-git/`. */
+  worktrees: LinkedWorktree[];
   /** Delete the copy (and the temp folder when this call created it). Safe to call twice. */
   cleanup(): Promise<void>;
 }
@@ -400,9 +404,9 @@ export async function prepareFixture(options: PrepareOptions = {}): Promise<Prep
   const phasesDir = path.join(root, 'docs', 'phases');
   const runsDir = path.join(phasesDir, '.runs');
   const freshness = options.freshness ?? 'fresh';
-  if (freshness !== 'as-is') {
-    await retimeRunLogs(runsDir, (options.preparedAt ?? new Date()).getTime() - FRESHNESS_AGE_MS[freshness]);
-  }
+  const latestAt = freshness === 'as-is' ? null : (options.preparedAt ?? new Date()).getTime() - FRESHNESS_AGE_MS[freshness];
+  if (latestAt !== null) await retimeRunLogs(runsDir, latestAt);
+  const worktrees = options.source === undefined ? await linkWorktrees(root, latestAt) : [];
 
   let cleaned: Promise<void> | null = null;
   return {
@@ -410,11 +414,97 @@ export async function prepareFixture(options: PrepareOptions = {}): Promise<Prep
     phasesDir,
     runsDir,
     name,
+    worktrees,
     cleanup() {
       cleaned ??= rm(owned, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
       return cleaned;
     },
   };
+}
+
+/** A linked worktree in a prepared copy (see {@link linkWorktrees}). */
+export interface LinkedWorktree {
+  /** Its folder name under `.git/worktrees/` and under `worktrees/`. */
+  name: string;
+  /** Absolute project folder of the worktree (`{root}/worktrees/{name}`). */
+  root: string;
+  /** Absolute `{root}/docs/phases/.runs` of the worktree. */
+  runsDir: string;
+  /** When git "created" it: the mtime set on its `commondir` file, in ms. */
+  createdMs: number;
+}
+
+/** How long before a worktree's first logged event its `commondir` mtime is set. */
+export const WORKTREE_LEAD_MS = 60_000;
+
+/**
+ * Turn a copied fixture's `dot-git/` into the repo's `.git` folder, with each
+ * `dot-git/worktrees/{name}/` (holding `HEAD` and `commondir`) linked to the
+ * checkout at `{root}/worktrees/{name}/`, the way `git worktree add` lays it
+ * out: `{entry}/gitdir` names `{checkout}/.git`, and that `.git` file says
+ * `gitdir: {entry}`. Both are written here, since they hold absolute paths
+ * into the copy.
+ *
+ * Each worktree's run logs get the same retiming as the main ones (latest
+ * event at `latestAt`, unless it's `null` for `as-is`), and its `commondir`
+ * mtime, which the viewer reads as the worktree's creation time, is set
+ * {@link WORKTREE_LEAD_MS} before its first logged event, so those logs count
+ * as written in the worktree. A worktree with no events is "created" now.
+ * No `dot-git/`: nothing happens and the list is empty.
+ */
+export async function linkWorktrees(root: string, latestAt: number | null): Promise<LinkedWorktree[]> {
+  const source = path.join(root, 'dot-git');
+  if (!(await isDirectory(source))) return [];
+  const gitDir = path.join(root, '.git');
+  await rename(source, gitDir);
+
+  let names: string[];
+  try {
+    names = (await readdir(path.join(gitDir, 'worktrees'), { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name);
+  } catch {
+    names = [];
+  }
+  names.sort();
+
+  const linked: LinkedWorktree[] = [];
+  for (const name of names) {
+    const entry = path.join(gitDir, 'worktrees', name);
+    const checkout = path.join(root, 'worktrees', name);
+    await mkdir(checkout, { recursive: true });
+    await writeFile(path.join(entry, 'gitdir'), `${toPosix(path.join(checkout, '.git'))}\n`, 'utf8');
+    await writeFile(path.join(checkout, '.git'), `gitdir: ${toPosix(entry)}\n`, 'utf8');
+
+    const runsDir = path.join(checkout, 'docs', 'phases', '.runs');
+    if (latestAt !== null) await retimeRunLogs(runsDir, latestAt);
+    const first = await earliestEvent(runsDir);
+    const created = new Date(first === null ? Date.now() : first - WORKTREE_LEAD_MS);
+    await utimes(path.join(entry, 'commondir'), created, created);
+    linked.push({ name, root: checkout, runsDir, createdMs: created.getTime() });
+  }
+  return linked;
+}
+
+/** Forward slashes, the way Git for Windows writes paths into its metadata files. */
+function toPosix(p: string): string {
+  return p.split(path.sep).join('/');
+}
+
+/** The earliest event `ts` (ms) across the `.jsonl` logs in `runsDir`, or `null` when there are none. */
+async function earliestEvent(runsDir: string): Promise<number | null> {
+  let names: string[];
+  try {
+    names = (await readdir(runsDir)).filter((n) => n.endsWith('.jsonl'));
+  } catch {
+    return null;
+  }
+  let earliest: number | null = null;
+  for (const n of names) {
+    for (const line of (await readFile(path.join(runsDir, n), 'utf8')).split('\n')) {
+      const t = eventTime(line);
+      if (t !== null && (earliest === null || t < earliest)) earliest = t;
+    }
+  }
+  return earliest;
 }
 
 /**

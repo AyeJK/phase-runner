@@ -1,0 +1,4 @@
+{"v":1,"ts":"2026-09-28T13:04:12Z","phase":2,"wave":1,"sprint":"2.1","gate":"implement","result":"pass","attempt":1,"max":3,"summary":"done 1,2,3 — Detail route and not-found state"}
+{"v":1,"ts":"2026-09-28T13:05:31Z","phase":2,"wave":1,"sprint":"2.1","gate":"verify","result":"pass","attempt":1,"max":3,"summary":"criteria 2/2 met"}
+{"v":1,"ts":"2026-09-28T13:09:48Z","phase":2,"wave":1,"sprint":"2.1","gate":"wave_test","result":"pass","attempt":1,"max":3,"summary":"2 URLs, 3 viewports"}
+{"v":1,"ts":"2026-09-28T13:11:02Z","phase":2,"wave":1,"sprint":"2.1","gate":"doc_sync","result":"pass","attempt":1,"max":1,"summary":"3 tasks updated","files":["src/trips/TripDetail.tsx","src/trips/TripDetail.css","src/trips/TripList.tsx"]}

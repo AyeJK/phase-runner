@@ -11,11 +11,14 @@
  *    Without `--dir`, {@link detectWorkspace} runs; when it finds nothing or
  *    several candidates the CLI still starts, and the server carries that
  *    result so the UI can show its empty or pick-a-folder state.
- * 3. One viewer per project (`server/instance.ts`): when the root is settled
+ * 3. A root inside a linked git worktree becomes the main checkout's
+ *    matching project folder ({@link toMainCheckout}), which already shows
+ *    every worktree's runs, so the next step finds the main viewer.
+ * 4. One viewer per project (`server/instance.ts`): when the root is settled
  *    and a live viewer for it is recorded in its instance file, print that
  *    viewer's URL and exit 0 without starting anything. A stale instance
  *    file is deleted and replaced.
- * 4. Start the server on the first free port from `--port` (default
+ * 5. Start the server on the first free port from `--port` (default
  *    {@link DEFAULT_PORT}) upward, bound to {@link HOST} only, write the
  *    instance file, and print the URL of the port actually bound plus the
  *    resolved root. With `--json`, stdout gets exactly one line instead,
@@ -44,6 +47,7 @@ import {
   type InstanceInfo,
 } from './server/instance.js';
 import { HOST, MAX_PORT } from './server/port.js';
+import { mainRoot, type WorktreeOptions } from './server/worktrees.js';
 
 // Port binding lives in server/port.ts (shared with the HTTP server); the CLI
 // re-exports it so callers keep one import site.
@@ -140,6 +144,8 @@ export function usage(): string {
     '',
     'One viewer runs per project: if one is already running for the same folder,',
     'its URL is printed and the command exits without starting another.',
+    "Started inside a git worktree, it uses the main checkout's viewer, which",
+    'shows phases running in worktrees too.',
   ].join('\n');
 }
 
@@ -199,6 +205,19 @@ export async function resolveDirOption(
   return { ok: true, workspace: { kind: 'found', root, source: 'dir' } };
 }
 
+/**
+ * A found root inside a linked git worktree becomes the main checkout's
+ * matching project folder ({@link mainRoot}), when that folder has
+ * `docs/phases/`. The viewer for the main checkout already shows every
+ * worktree's runs, so starting from a worktree reuses (or becomes) that
+ * viewer instead of starting a second one. Anything else is unchanged.
+ */
+export async function toMainCheckout(workspace: Workspace, options?: WorktreeOptions): Promise<Workspace> {
+  if (workspace.kind !== 'found') return workspace;
+  const root = await mainRoot(workspace.root, options);
+  return root === workspace.root ? workspace : { ...workspace, root };
+}
+
 // ---------------------------------------------------------------------------
 // Server seam
 // ---------------------------------------------------------------------------
@@ -241,6 +260,8 @@ export interface CliIo {
   startServer?: StartServer;
   /** Folder for instance files. Defaults to {@link defaultInstanceDir} (`os.tmpdir()/phase-viewer`). */
   instanceDir?: string;
+  /** Options for the git-folder walk in {@link toMainCheckout} (tests pass a `ceiling`). */
+  worktrees?: WorktreeOptions;
 }
 
 /**
@@ -291,7 +312,7 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<CliRes
 
   const resolved = await resolveWorkspace(options, io.cwd);
   if (!resolved.ok) return fail(resolved.error);
-  const { workspace } = resolved;
+  const workspace = await toMainCheckout(resolved.workspace, io.worktrees);
   const root = workspace.kind === 'found' ? workspace.root : null;
   const instanceDir = io.instanceDir ?? defaultInstanceDir();
 

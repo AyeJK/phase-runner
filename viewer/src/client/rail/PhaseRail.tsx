@@ -29,13 +29,13 @@
  *
  * Test hooks: `phase-rail` (with `data-phase`), `phase-meta`, `phase-status`
  * (with `data-status`), `phase-progress-text`, `rail-summary` (the waves
- * item), `rail-retries`, `phase-time`, `phase-status-bar`,
+ * item), `rail-retries`, `phase-time`, `phase-worktree`, `phase-status-bar`,
  * `section[data-rail-row]` (with `data-kind`, `data-row-state`), `wave-name`,
  * `wave-live`, `wave-mode`, `wave-duration`, `wave-retries`,
  * `escalation-banner`, `run-end` (with `data-kind`), plus those in `SprintCard.tsx`.
  */
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { Escalation, Phase, Project } from '../../core/model.js';
+import type { Escalation, Phase, Project, WorktreeRef } from '../../core/model.js';
 import { StatusIcon } from '../components/StatusIcon.js';
 import { StatusSegments } from '../components/StatusSegments.js';
 import { notStartedTasks, phaseLabel, phaseRuns } from '../data/status.js';
@@ -93,7 +93,7 @@ export function PhaseRail({ project, phase, headingLevel = 1 }: PhaseRailProps) 
             <span className="page-name">Phase {phase.number}</span>
           )}
         </Title>
-        <MetaLine meta={view.meta} />
+        <MetaLine meta={view.meta} worktree={phase.worktree ?? runs?.worktree ?? null} />
       </header>
 
       {!view.meta.complete && (
@@ -163,10 +163,18 @@ function Dotted({ items }: { items: ReactNode[] }) {
   );
 }
 
-/** "Complete · 55 of 55 tasks · 4 waves, 69 min · No retries · Finished Oct 3, 5:14 PM". */
-function MetaLine({ meta }: { meta: PhaseMeta }) {
+/**
+ * "Complete · 55 of 55 tasks · 4 waves, 69 min · No retries · Finished Oct 3,
+ * 5:14 PM", plus "Worktree {branch}" at the end when the phase is shown from a
+ * linked git worktree (its name when detached), with the worktree's path as
+ * its tooltip. Each dot travels with the item after it, so a wrapped line
+ * never ends on one. The plain words (Not started, Waiting) are `.plain`, not
+ * the boxed `.tag` the sprint badges use.
+ */
+function MetaLine({ meta, worktree }: { meta: PhaseMeta; worktree: WorktreeRef | null }) {
+  const stateClass = meta.stateKind === 'tag' ? 'plain' : meta.stateKind;
   const items: ReactNode[] = [
-    <span key="state" className={`meta-state ${meta.stateKind}`} data-testid="phase-status" data-status={meta.stateKind}>
+    <span key="state" className={`meta-state ${stateClass}`} data-testid="phase-status" data-status={meta.stateKind}>
       {meta.stateIcon !== null && <StatusIcon kind={meta.stateIcon} />}
       {meta.stateText}
     </span>,
@@ -191,9 +199,27 @@ function MetaLine({ meta }: { meta: PhaseMeta }) {
       </span>,
     );
   }
+  if (worktree !== null) {
+    items.push(
+      <span key="worktree" className="meta-worktree" title={worktree.path} data-testid="phase-worktree">
+        Worktree {worktree.branch ?? worktree.name}
+      </span>,
+    );
+  }
   return (
     <p className="meta" data-testid="phase-meta">
-      <Dotted items={items} />
+      {items.map((item, i) =>
+        i === 0 ? (
+          item
+        ) : (
+          <span key={i} className="meta-next">
+            <span className="sep" aria-hidden="true">
+              ·
+            </span>
+            {item}
+          </span>
+        ),
+      )}
     </p>
   );
 }

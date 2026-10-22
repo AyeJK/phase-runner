@@ -304,6 +304,25 @@ export interface Phase {
   trailingSections: Section[];
   /** 1-based line of the `# Phase` header, or `0` when the file has none. */
   line: number;
+  /**
+   * The linked git worktree this copy of the phase file was read from, when
+   * the viewer shows it from one (the phase is running there). Absent for a
+   * copy from the main checkout, and always absent from `loadProject`.
+   */
+  worktree?: WorktreeRef;
+}
+
+/**
+ * A linked git worktree a {@link Phase} or {@link PhaseRuns} was read from
+ * (see `server/checkouts.ts`).
+ */
+export interface WorktreeRef {
+  /** The worktree's name: its folder under `{git common dir}/worktrees/`. */
+  name: string;
+  /** Checked-out branch without `refs/heads/`; `null` when detached or unknown. */
+  branch: string | null;
+  /** Absolute project folder inside the worktree (the one holding its `docs/phases/`). */
+  path: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -547,6 +566,12 @@ export interface PhaseRuns {
   escalations: Escalation[];
   /** Per sprint id, every {@link SprintRun} for that sprint across runs and waves, oldest first. */
   sprintHistory: Record<string, SprintRun[]>;
+  /**
+   * The linked git worktree this run log was read from, when the viewer shows
+   * it from one. Absent for the main checkout's log, and always absent from
+   * `loadProject`.
+   */
+  worktree?: WorktreeRef;
 }
 
 /** One wave of a sprint's history, as returned by `sprintHistory`. */
