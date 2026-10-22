@@ -605,6 +605,47 @@ test.describe('phase sidebar and switcher', () => {
     });
   });
 
+  test.describe('1280 px, resizing', () => {
+    test.use({ viewport: { width: 1280, height: 900 } });
+
+    test('the handle drags the sidebar between its limits, remembers the width, and double-click resets it', async ({ page }) => {
+      await open(page, `${loop.baseURL}/phase/2`);
+      const side = page.getByTestId('phase-sidebar');
+      const handle = page.getByTestId('side-resize');
+      const sideWidth = async () => Math.round((await side.boundingBox())!.width);
+      const drag = async (toX: number) => {
+        const box = (await handle.boundingBox())!;
+        await page.mouse.move(box.x + box.width / 2, box.y + 200);
+        await page.mouse.down();
+        await page.mouse.move(toX, box.y + 200, { steps: 5 });
+        await page.mouse.up();
+      };
+
+      await expect(handle).toHaveAttribute('role', 'separator');
+      expect(await sideWidth()).toBe(264);
+
+      await drag(360);
+      expect(await sideWidth()).toBe(360);
+      await drag(900);
+      expect(await sideWidth()).toBe(480);
+      await drag(40);
+      expect(await sideWidth()).toBe(200);
+
+      await handle.focus();
+      await page.keyboard.press('ArrowRight');
+      expect(await sideWidth()).toBe(216);
+
+      await page.reload();
+      await expect(page.locator('.app')).toHaveAttribute('data-connection', 'live');
+      expect(await sideWidth()).toBe(216);
+      expect(await page.evaluate(() => (globalThis as unknown as PageGlobals).localStorage.getItem('phase-viewer:side-width'))).toBe('216');
+
+      await handle.dblclick();
+      expect(await sideWidth()).toBe(264);
+      expect(await page.evaluate(() => (globalThis as unknown as PageGlobals).localStorage.getItem('phase-viewer:side-width'))).toBeNull();
+    });
+  });
+
   test.describe('768 px', () => {
     test.use({ viewport: { width: 768, height: 900 } });
 

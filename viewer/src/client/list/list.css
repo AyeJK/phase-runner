@@ -7,9 +7,11 @@
  * into the plain heading line this view uses.
  */
 
+/* `--side` is the token, or the width dragged with the handle; never past half the window. */
 .list-layout {
+  --side-w: min(var(--side), 50vw);
   display: grid;
-  grid-template-columns: var(--side) minmax(0, 1fr);
+  grid-template-columns: var(--side-w) minmax(0, 1fr);
   min-height: calc(100vh - var(--head));
 }
 
@@ -25,6 +27,55 @@
   padding: 20px 12px;
   background: var(--surface);
   border-right: 1px solid var(--border);
+}
+
+/*
+ * The resize handle: a strip over the sidebar's border, reaching into the
+ * rail side so it stays clear of the sidebar's scrollbar. A line shows on
+ * hover, while dragging and on keyboard focus.
+ */
+.side-resize {
+  position: fixed;
+  top: var(--head);
+  bottom: 0;
+  left: calc(var(--side-w) - 2px);
+  z-index: 3;
+  width: 7px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.side-resize::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 1px;
+  width: 2px;
+  background: transparent;
+  transition: background 0.15s;
+}
+.side-resize:hover::after {
+  background: var(--border-strong);
+  transition-delay: 0.1s;
+}
+.side-resize[data-dragging]::after,
+.side-resize:focus-visible::after {
+  background: var(--text-3);
+  transition-delay: 0s;
+}
+.side-resize:focus-visible {
+  outline: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .side-resize::after {
+    transition: none;
+  }
+}
+/* While dragging: the resize cursor everywhere and no text selection. */
+.side-resizing,
+.side-resizing * {
+  cursor: col-resize !important;
+  user-select: none;
 }
 
 /* Heading line: "Phases" and the filter ("All 9"). */
@@ -241,7 +292,8 @@
     display: block;
     min-height: 0;
   }
-  .side {
+  .side,
+  .side-resize {
     display: none;
   }
   .list-main {

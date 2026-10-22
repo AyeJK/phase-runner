@@ -9,6 +9,7 @@
  *   else the default phase (`impliedPhase`), and the URL stays as it is.
  * - The page scrolls as a whole; the sidebar is sticky under the top bar with
  *   a scroll of its own. A newly selected phase starts at the top.
+ * - A handle on the sidebar's edge drags its width ({@link SideResizer}).
  * - The rail's heading is a plain heading line here (not sticky), with the
  *   phase title as the page's `h1`.
  * - Warnings on files no phase owns show in the rail's parse-warnings banner
@@ -17,13 +18,14 @@
  * Test hooks: `list-view`, `phase-sidebar`, `list-main`, plus
  * {@link PhaseList}'s, {@link PhaseSwitcher}'s and the rail's.
  */
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, type CSSProperties } from 'react';
 import type { Project } from '../../core/model.js';
 import { PhaseRail } from '../rail/PhaseRail.js';
 import { PhaseNotFound } from '../states/NotFound.js';
 import { impliedPhase, phaseRows } from './derive.js';
 import { PhaseList } from './PhaseList.js';
 import { PhaseSwitcher } from './PhaseSwitcher.js';
+import { SideResizer, useSideWidth } from './SideResizer.js';
 import './list.css';
 
 interface ListViewProps {
@@ -36,6 +38,7 @@ export function ListView({ project, phase }: ListViewProps) {
   const rows = useMemo(() => phaseRows(project), [project]);
   const selected = phase ?? impliedPhase(project);
   const selectedPhase = selected === null ? undefined : project.phases.find((p) => p.number === selected);
+  const [sideWidth, setSideWidth] = useSideWidth();
 
   // A newly selected phase starts at the top of the page (unless a card is named).
   useEffect(() => {
@@ -43,11 +46,16 @@ export function ListView({ project, phase }: ListViewProps) {
   }, [selected]);
 
   return (
-    <div className="list-layout" data-testid="list-view">
+    <div
+      className="list-layout"
+      data-testid="list-view"
+      style={sideWidth === null ? undefined : ({ '--side': `${sideWidth}px` } as CSSProperties)}
+    >
       {rows.length > 0 && <PhaseSwitcher rows={rows} selected={selected} />}
       <nav className="side" aria-label="Phases" data-testid="phase-sidebar">
         <PhaseList rows={rows} selected={selected} />
       </nav>
+      <SideResizer width={sideWidth} onChange={setSideWidth} />
       <main className="list-main" id="main" data-testid="list-main">
         {selectedPhase ? (
           <div className="list-rail">
