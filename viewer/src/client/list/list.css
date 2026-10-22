@@ -85,9 +85,9 @@
 }
 .ph-filter-menu button {
   display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 8px 10px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 8px 8px;
   font: 500 13px var(--sans);
   color: var(--text-2);
   text-align: left;
@@ -96,13 +96,29 @@
   border-radius: calc(var(--r) - 2px);
   cursor: pointer;
 }
-.ph-filter-menu button:hover,
-.ph-filter-menu button[aria-pressed='true'] {
+.ph-filter-menu button:hover {
   color: var(--text);
   background: var(--surface-2);
 }
+/* Several can be chosen, so a check marks each (the background is left to hover). */
+.ph-filter-menu button[aria-pressed='true'] {
+  color: var(--text);
+}
 .ph-filter-menu button:focus-visible {
   outline-offset: -2px;
+}
+.ph-filter-check {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  visibility: hidden;
+}
+.ph-filter-menu button[aria-pressed='true'] .ph-filter-check {
+  visibility: visible;
+}
+.ph-filter-label {
+  flex: 1;
+  margin-right: 8px;
 }
 .ph-filter-count {
   font: 500 12px var(--mono);

@@ -13,10 +13,12 @@ import { defaultPhase, notStartedTasks, phaseLabel, type NotStarted } from '../d
 import { plural } from '../format.js';
 import {
   isActiveState,
+  PHASE_FILTERS,
   phaseGroup,
   sprintCardState,
   type PhaseFilter,
   type PhaseGroup,
+  type PhaseShow,
   type SprintState,
 } from '../rail/derive.js';
 
@@ -100,9 +102,27 @@ export function phaseRows(project: Project): PhaseRow[] {
   return project.phases.map((phase) => phaseRow(project, phase));
 }
 
-/** The rows a filter shows: every row for All, else the rows in its group. */
-export function filterPhaseRows(rows: readonly PhaseRow[], show: PhaseFilter): readonly PhaseRow[] {
-  return show === 'all' ? rows : rows.filter((row) => row.group === show);
+/** The rows a filter shows: every row for All (no groups), else the rows in any of its groups. */
+export function filterPhaseRows(rows: readonly PhaseRow[], show: PhaseShow): readonly PhaseRow[] {
+  return show.length === 0 ? rows : rows.filter((row) => show.includes(row.group));
+}
+
+/** Whether a filter lets every phase through: no groups, or all of them. */
+export function showsAll(show: PhaseShow): boolean {
+  return show.length === 0 || show.length === PHASE_FILTERS.length - 1;
+}
+
+/** The filter button's words and count: "All 9", "In progress 2", "2 statuses 5". */
+export function phaseShowSummary(show: PhaseShow, counts: Record<PhaseFilter, number>): { label: string; count: number } {
+  if (showsAll(show)) return { label: 'All', count: counts.all };
+  if (show.length === 1) return { label: PHASE_FILTERS.find((f) => f.key === show[0])!.label, count: counts[show[0]!] };
+  return { label: `${show.length} statuses`, count: show.reduce((sum, group) => sum + counts[group], 0) };
+}
+
+/** The line shown when a filter matches no phase: its own for one group, a general one for several, `null` for All. */
+export function phaseShowEmpty(show: PhaseShow): string | null {
+  if (showsAll(show)) return null;
+  return show.length === 1 ? PHASE_FILTERS.find((f) => f.key === show[0])!.empty : 'No matching phases';
 }
 
 /** The first phase with a sprint in a gate state, or `null`. */

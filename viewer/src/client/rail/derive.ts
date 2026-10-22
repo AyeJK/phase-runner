@@ -292,8 +292,14 @@ export interface PhaseMeta {
 /** A phase's group. See the module comment. */
 export type PhaseGroup = 'progress' | 'complete' | 'future';
 
-/** The phase list's filter (`?show=`): every phase, or one group. */
+/** A choice in the phase list's filter menu: every phase, or one group. */
 export type PhaseFilter = 'all' | PhaseGroup;
+
+/**
+ * The phase list's filter (`?show=`): the groups shown, in menu order with no
+ * repeats. Empty is All.
+ */
+export type PhaseShow = readonly PhaseGroup[];
 
 /**
  * The phase list's filters in menu order: the label, and the line shown when

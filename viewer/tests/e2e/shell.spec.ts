@@ -272,6 +272,8 @@ test.describe('a still trail-log in a long-named folder', () => {
         ['/?show=complete', '/?show=complete'],
         ['/?show=all', '/'],
         ['/?show=bogus&x=1', '/'],
+        ['/?show=future,progress,future', '/?show=progress,future'],
+        ['/phase/2?show=complete,bogus', '/phase/2?show=complete'],
         ['/overview', '/'],
         ['/?phase=8', '/phase/8'],
         ['/?phase=2', '/phase/2'],
@@ -521,24 +523,46 @@ test.describe('phase sidebar and switcher', () => {
       await expect(choice('all')).toHaveAttribute('aria-pressed', 'true');
       await expect(choice('all')).toBeFocused();
 
-      // In progress: phase 2 only, in the URL, the menu closed and focus back on the button.
+      // In progress: phase 2 only, in the URL, the menu still open with only In progress checked.
       await choice('progress').click();
       await expect(page).toHaveURL(`${loop.baseURL}/phase/2?show=progress`);
-      await expect(menu).toHaveCount(0);
-      await expect(filter).toBeFocused();
+      await expect(menu).toBeVisible();
+      await expect(choice('progress')).toBeFocused();
+      await expect(choice('progress')).toHaveAttribute('aria-pressed', 'true');
+      await expect(choice('progress').locator('.ph-filter-check')).toBeVisible();
+      await expect(choice('all')).toHaveAttribute('aria-pressed', 'false');
+      await expect(choice('all').locator('.ph-filter-check')).toBeHidden();
       await expect(filter).toHaveText('In progress 1');
+      await expect(filter).toHaveAccessibleName('Filter phases: In progress, 1');
       await expect(rows).toHaveCount(1);
       await expect(phaseItem(side, 2)).toHaveAttribute('aria-current', 'page');
 
-      // Complete hides phase 2's row, but phase 2 stays on the right.
-      await filter.click();
+      // Not started as well: both groups' rows, in menu order in the URL, named by how many.
+      await choice('future').click();
+      await expect(page).toHaveURL(`${loop.baseURL}/phase/2?show=progress,future`);
+      await expect(filter).toHaveText('2 statuses 2');
+      await expect(rows).toHaveCount(2);
       await expect(choice('progress')).toHaveAttribute('aria-pressed', 'true');
+      await expect(choice('future')).toHaveAttribute('aria-pressed', 'true');
+
+      // Every group chosen reads as All, with All checked too.
       await choice('complete').click();
+      await expect(page).toHaveURL(`${loop.baseURL}/phase/2?show=progress,complete,future`);
+      await expect(filter).toHaveText('All 3');
+      await expect(choice('all')).toHaveAttribute('aria-pressed', 'true');
+      await expect(rows).toHaveCount(3);
+
+      // Taking In progress and Not started off leaves Complete, which hides phase 2's row; phase 2 stays on the right.
+      await choice('progress').click();
+      await choice('future').click();
       await expect(page).toHaveURL(`${loop.baseURL}/phase/2?show=complete`);
+      await expect(filter).toHaveText('Complete 1');
       await expect(rows).toHaveCount(1);
       await expect(phaseItem(side, 1)).toBeVisible();
       await expect(side.locator('a[aria-current="page"]')).toHaveCount(0);
       await expect(rail).toHaveAttribute('data-phase', '2');
+      await page.keyboard.press('Escape');
+      await expect(menu).toHaveCount(0);
 
       // Moving to another phase keeps the filter, and so does a reload.
       await expect(phaseItem(side, 1)).toHaveAttribute('href', '/phase/1?show=complete');
@@ -564,12 +588,20 @@ test.describe('phase sidebar and switcher', () => {
       await expect(filter).toBeFocused();
       await expect(page).toHaveURL(`${loop.baseURL}/phase/1?show=complete`);
 
-      // All takes the query off and shows every row.
+      // All takes the query off, unchecks the groups and shows every row.
       await filter.click();
       await choice('all').click();
       await expect(page).toHaveURL(`${loop.baseURL}/phase/1`);
       await expect(filter).toHaveText('All 3');
+      await expect(choice('complete')).toHaveAttribute('aria-pressed', 'false');
       await expect(rows).toHaveCount(3);
+
+      // Unchecking the only group chosen is All again.
+      await choice('future').click();
+      await expect(page).toHaveURL(`${loop.baseURL}/phase/1?show=future`);
+      await choice('future').click();
+      await expect(page).toHaveURL(`${loop.baseURL}/phase/1`);
+      await expect(choice('all')).toHaveAttribute('aria-pressed', 'true');
     });
   });
 
@@ -698,7 +730,7 @@ test.describe('phase sidebar and switcher', () => {
       await expect(sheet).toBeVisible();
       await expect(filter).toBeFocused();
 
-      // Not started: only phase 3 in the sheet, the sheet still open, the switcher still on phase 2.
+      // Not started: only phase 3 in the sheet, the sheet and menu still open, the switcher still on phase 2.
       await filter.click();
       await menu.locator('button[data-filter="future"]').click();
       await expect(page).toHaveURL(`${loop.baseURL}/phase/2?show=future`);
@@ -711,7 +743,10 @@ test.describe('phase sidebar and switcher', () => {
       await expect(page.getByTestId('list-main').getByTestId('phase-rail')).toHaveAttribute('data-phase', '2');
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
 
-      // Closed and opened again, the filter holds and focus lands on the first row shown.
+      // Closed and opened again (Escape for the menu, then the sheet), the filter holds and focus lands on the first row shown.
+      await page.keyboard.press('Escape');
+      await expect(menu).toHaveCount(0);
+      await expect(sheet).toBeVisible();
       await page.keyboard.press('Escape');
       await expect(sheet).toBeHidden();
       await sw.click();

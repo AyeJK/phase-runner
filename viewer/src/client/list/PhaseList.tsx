@@ -6,7 +6,8 @@
  * switcher's button reuses {@link PhaseEndItem} for its end item.
  *
  * Counts come from the rows' groups (`phaseGroup`). A filter nothing matches
- * shows one grey line ("No phases in progress"). The selected phase stays on
+ * shows one grey line ("No phases in progress", or "No matching phases" for
+ * several groups). The selected phase stays on
  * the page even when the filter hides its row, and the rows' links keep the
  * filter.
  *
@@ -22,9 +23,9 @@
 import { useMemo } from 'react';
 import { StatusIcon } from '../components/StatusIcon.js';
 import { StatusSegments } from '../components/StatusSegments.js';
-import { countGroups, PHASE_FILTERS, type PhaseFilter } from '../rail/derive.js';
+import { countGroups, type PhaseShow } from '../rail/derive.js';
 import { Link, paths, readShow, useRouter } from '../shell/router.js';
-import { filterPhaseRows, type PhaseRow } from './derive.js';
+import { filterPhaseRows, phaseShowEmpty, type PhaseRow } from './derive.js';
 import { PhaseFilterMenu } from './PhaseFilterMenu.js';
 
 /** Words for an icon end item (its accessible name). */
@@ -79,7 +80,7 @@ export function PhaseList({ rows, selected, onChoose }: PhaseListProps) {
   const show = readShow(useRouter().location.search);
   const counts = useMemo(() => countGroups(rows.map((r) => r.group)), [rows]);
   const shown = filterPhaseRows(rows, show);
-  const empty = PHASE_FILTERS.find((f) => f.key === show)!.empty;
+  const empty = phaseShowEmpty(show);
   return (
     <>
       <div className="side-h">
@@ -108,7 +109,7 @@ export function PhaseList({ rows, selected, onChoose }: PhaseListProps) {
 interface PhaseRowLinkProps {
   row: PhaseRow;
   /** The filter, kept in the row's link. */
-  show: PhaseFilter;
+  show: PhaseShow;
   current: boolean;
   onChoose?: () => void;
 }

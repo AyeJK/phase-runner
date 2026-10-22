@@ -20,10 +20,11 @@
  * | `/list`, `/list?…` without a phase, `/overview` | `/` |
  * | `/sprint/:id` | `/phase/{n}#s{id}` |
  *
- * `?show=progress | complete | future` is the phase list's filter (no `show`
- * is All). It's kept on `/` and `/phase/N`, through every redirect above and
- * by the phase rows' links; any other query, or an unknown `show`, is
- * dropped.
+ * `?show=` is the phase list's filter: one or more of `progress`, `complete`
+ * and `future`, comma-separated (no `show` is All). It's kept on `/` and
+ * `/phase/N`, through every redirect above and by the phase rows' links,
+ * rewritten in menu order with no repeats; any other query, or an unknown
+ * `show` value, is dropped.
  *
  * Hash-only links (`#s2.3` on the rail) are left to the browser, which jumps
  * to the element without a navigation; `hashchange` keeps `hash` here in
@@ -41,7 +42,7 @@ import {
   type ReactNode,
 } from 'react';
 import { phaseOfSprintId } from '../data/status.js';
-import { PHASE_FILTERS, type PhaseFilter } from '../rail/derive.js';
+import { PHASE_FILTERS, type PhaseGroup, type PhaseShow } from '../rail/derive.js';
 
 /** A matched route. */
 export type Route =
@@ -90,17 +91,24 @@ function readPhase(search: string): number | null {
   return raw !== null && /^\d+$/.test(raw) ? Number(raw) : null;
 }
 
-const FILTERS: ReadonlySet<string> = new Set(PHASE_FILTERS.map((f) => f.key).filter((key) => key !== 'all'));
+/** The groups, in menu order. */
+const GROUPS: readonly PhaseGroup[] = PHASE_FILTERS.map((f) => f.key).filter((key): key is PhaseGroup => key !== 'all');
 
-/** A `?show=` value; anything unknown (or none) is All. */
-export function readShow(search: string): PhaseFilter {
+/**
+ * A `?show=` value: its known groups, comma-separated, in menu order with no
+ * repeats. Unknown ones are dropped; none (or none known) is All. An old
+ * single value (`?show=progress`) reads as that one group.
+ */
+export function readShow(search: string): PhaseShow {
   const raw = new URLSearchParams(search).get('show');
-  return raw !== null && FILTERS.has(raw) ? (raw as PhaseFilter) : 'all';
+  if (raw === null) return [];
+  const keys = raw.split(',');
+  return GROUPS.filter((group) => keys.includes(group));
 }
 
-/** The query for a filter: `?show=progress`, or nothing for All. */
-function showSearch(show: PhaseFilter): string {
-  return show === 'all' ? '' : `?show=${show}`;
+/** The query for a filter: `?show=progress,future`, or nothing for All. */
+function showSearch(show: PhaseShow): string {
+  return show.length === 0 ? '' : `?show=${show.join(',')}`;
 }
 
 /**
@@ -195,11 +203,11 @@ export function useRouter(): RouterValue {
 /** Paths for each route, so links are written one way. */
 export const paths = {
   /** The list view on the running phase, else the default one, with the phase list filtered by `show`. */
-  home: (show: PhaseFilter = 'all'): string => `/${showSearch(show)}`,
+  home: (show: PhaseShow = []): string => `/${showSearch(show)}`,
   /** The list view on phase n, with the phase list filtered by `show`. */
-  phase: (n: number, show: PhaseFilter = 'all'): string => `/phase/${n}${showSearch(show)}`,
+  phase: (n: number, show: PhaseShow = []): string => `/phase/${n}${showSearch(show)}`,
   /** A sprint: its phase, landing on the sprint's card. */
-  sprint: (id: string, show: PhaseFilter = 'all'): string => {
+  sprint: (id: string, show: PhaseShow = []): string => {
     const n = phaseOfSprintId(id);
     return n === null ? paths.home(show) : `${paths.phase(n, show)}#${paths.sprintSection(encodeURIComponent(id))}`;
   },

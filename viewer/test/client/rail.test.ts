@@ -24,10 +24,19 @@ import {
   runEnd,
   sprintCardState,
   type PhaseFilter,
+  type PhaseShow,
   type RailSprint,
   type RailView,
 } from '../../src/client/rail/derive.js';
-import { filterPhaseRows, impliedPhase, phaseRow, phaseRows, runningPhase } from '../../src/client/list/derive.js';
+import {
+  filterPhaseRows,
+  impliedPhase,
+  phaseRow,
+  phaseRows,
+  phaseShowEmpty,
+  phaseShowSummary,
+  runningPhase,
+} from '../../src/client/list/derive.js';
 import { notStartedTasks } from '../../src/client/data/status.js';
 import { phaseBadge, taskIcon } from '../../src/client/sprint/status.js';
 import { RUN_LOGS } from '../fixtures/index.js';
@@ -827,12 +836,26 @@ describe('filter groups', () => {
       { n: 4, sprints: [['4.1', 'xM']] },
     ]);
     const rows = phaseRows(project);
-    const numbers = (show: PhaseFilter): number[] => filterPhaseRows(rows, show).map((r) => r.number);
-    expect(numbers('all')).toEqual([1, 2, 3, 4]);
-    expect(numbers('progress')).toEqual([2, 4]);
-    expect(numbers('complete')).toEqual([1]);
-    expect(numbers('future')).toEqual([3]);
-    expect(filterPhaseRows(rows.slice(0, 1), 'future')).toEqual([]);
+    const numbers = (show: PhaseShow): number[] => filterPhaseRows(rows, show).map((r) => r.number);
+    expect(numbers([])).toEqual([1, 2, 3, 4]);
+    expect(numbers(['progress'])).toEqual([2, 4]);
+    expect(numbers(['complete'])).toEqual([1]);
+    expect(numbers(['future'])).toEqual([3]);
+    expect(numbers(['progress', 'future'])).toEqual([2, 3, 4]);
+    expect(numbers(['progress', 'complete', 'future'])).toEqual([1, 2, 3, 4]);
+    expect(filterPhaseRows(rows.slice(0, 1), ['future'])).toEqual([]);
+  });
+
+  it('names the filter on its button and its empty line: All, one group, or several', () => {
+    const counts: Record<PhaseFilter, number> = { all: 9, progress: 2, complete: 4, future: 3 };
+    expect(phaseShowSummary([], counts)).toEqual({ label: 'All', count: 9 });
+    expect(phaseShowSummary(['progress', 'complete', 'future'], counts)).toEqual({ label: 'All', count: 9 });
+    expect(phaseShowSummary(['future'], counts)).toEqual({ label: 'Not started', count: 3 });
+    expect(phaseShowSummary(['progress', 'future'], counts)).toEqual({ label: '2 statuses', count: 5 });
+    expect(phaseShowEmpty([])).toBeNull();
+    expect(phaseShowEmpty(['progress', 'complete', 'future'])).toBeNull();
+    expect(phaseShowEmpty(['complete'])).toBe('No complete phases');
+    expect(phaseShowEmpty(['progress', 'future'])).toBe('No matching phases');
   });
 
   it('lists the filters in menu order, with a line for each group nothing matches', () => {
