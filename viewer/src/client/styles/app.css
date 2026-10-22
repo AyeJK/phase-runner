@@ -88,6 +88,15 @@
 .brand-v {
   display: none;
 }
+/* "dev", only under Vite's dev server (TopBar.tsx). Grey, like a tag. */
+.dev-tag {
+  font: 500 11px var(--mono);
+  color: var(--text-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
 
 /* Settings (shell/SettingsMenu.tsx): the gear at the right, its dropdown under it. */
 .settings {

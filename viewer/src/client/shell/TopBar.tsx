@@ -13,7 +13,10 @@
  * package.json, set at build time) and opens the GitHub repo in a new tab.
  * Below 480px only "v0.4.0" shows; its accessible name stays whole.
  *
- * Test hooks: `project-name`, `brand-link`.
+ * Under Vite's dev server (`npm run dev`) a grey "dev" tag sits before the
+ * link, so the dev viewer can't be mistaken for the published one.
+ *
+ * Test hooks: `project-name`, `brand-link`, `dev-tag`.
  */
 import { baseName } from '../data/applyUpdate.js';
 import { SettingsMenu } from './SettingsMenu.js';
@@ -30,6 +33,11 @@ export function TopBar({ root }: { root: string | null }) {
         </span>
       )}
       <div className="head-end">
+        {import.meta.env.DEV && (
+          <span className="dev-tag" title="Running from source (npm run dev)" data-testid="dev-tag">
+            dev
+          </span>
+        )}
         <a
           className="brand-link"
           href={REPO_URL}
