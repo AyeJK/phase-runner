@@ -12,12 +12,13 @@ Phase Runner is a set of Claude skills that takes a product from a rough idea to
 
 ## Install
 
-Two commands in Claude Code:
+In Claude Code:
 
 ```
-/plugin marketplace add AyeJK/phase-runner
-/plugin install phase-runner@phase-runner
+/plugin install phase-runner --marketplace AyeJK/phase-runner
 ```
+
+Or add it from the [Anthropic plugin directory](https://claude.ai/customize/plugins/id/edc33bb8-c02f-4eec-987c-93b6a5c1cd40%40anthropic-plugin-directory) on claude.ai, which puts it in Claude Code, Cowork and chat on your account. The directory serves the latest reviewed version, so it can trail this repo by a few days.
 
 Skills load as `phase-runner:phase-planner`, `phase-runner:phase-builder`, and so on.
 
@@ -90,7 +91,7 @@ In a Claude app session, the two planning skills publish what they write as Clau
 - **`/phase-status`**, which prints the phase, how many tasks each sprint has done, the current wave and gate (`wave 2 · 8.3 verify 2/3`), and when the last event was logged. The mod answers it from the files on disk, with no model call and no tokens.
 
 ```
-/plugin install phase-runner-hud@phase-runner
+/plugin install phase-runner-hud --marketplace AyeJK/phase-runner
 ```
 
 Then start a new session from your project folder, the one that holds `docs/phases/`. It has two options, both in `/config`: `workspace`, for when `docs/phases/` isn't in the session's folder, and `sound`, a short chime with each toast (off by default). [`hud/README.md`](hud/README.md) has the details.

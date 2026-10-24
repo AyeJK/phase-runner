@@ -29,11 +29,10 @@ The mod answers this itself from the files on disk. It starts no turn and uses n
 
 ## Install
 
-In Claude Code, with the Phase Runner marketplace added:
+In Claude Code:
 
 ```
-/plugin marketplace add AyeJK/phase-runner
-/plugin install phase-runner-hud@phase-runner
+/plugin install phase-runner-hud --marketplace AyeJK/phase-runner
 ```
 
 Start a new session from your project folder, the one that holds `docs/phases/`. In a folder with no `docs/phases/` the mod stays quiet and nothing raises a toast.
