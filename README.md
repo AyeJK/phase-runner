@@ -45,6 +45,8 @@ Experimental: [Phase Runner HUD Claude mod](#claude-code-hud-experimental) (sepa
 
 Step 4 runs on its own. `phase-builder` groups sprints into parallel-safe waves and gives each sprint a fresh sub-agent, and UI sprints build against your design system. After every wave, `phase-verify` runs your build, typecheck and tests and reviews the diff against every acceptance criterion, and `phase-wave-test` checks UI work in a browser against your design system. A failed wave retries the same sprint with the failure attached, up to three times, then escalates to you. Only `phase-doc-sync` writes status back to the phase file, so the plan always matches what actually passed. Nothing ships past you.
 
+Want two phases going at once? Say *"run phase 4 in a worktree"* in a second session. That phase builds on its own branch in a git worktree, so neither session's verify gate trips over the other's half-written code. When the phase finishes, `phase-builder` merges the branch back and asks before removing the worktree.
+
 ## Local dashboard
 
 [`phase-viewer`](viewer/) is a local dashboard for tracking your phases, sprints and tasks. Monitor your phase builds, wave progress, verification failures and anything that needs your attention. It updates as the files change, and it only reads your project, never writes to it.
@@ -62,6 +64,8 @@ Or, from your project folder (the one that holds `docs/phases/`), in your own te
 ```
 npx phase-viewer
 ```
+
+Phases running in git worktrees (phase-builder's worktree mode or a desktop side session) show up in the same viewer until their branch is merged. You don't need a second viewer. Needs phase-viewer 0.6.0 or later.
 
 **Local sessions only.** The viewer serves on `localhost` of the machine that runs it. In a cloud or remote Claude Code session, the skill starts nothing and tells you to run `npx phase-viewer` on your own machine, against your local checkout.
 
@@ -142,7 +146,7 @@ These are the five you talk to. Everything else runs on its own.
 | `product-planner` | Turns a rough idea into a rich HTML plan doc — options considered, data flow, open questions. Optional first step. In Claude app sessions it publishes the plan as a hosted page ([Claude artifacts](#claude-artifacts)). |
 | `design-planner` | Locks a visual design system and per-screen specs *before* implementation starts. In Claude app sessions it publishes a Design System artifact and a Design canvas ([Claude artifacts](#claude-artifacts)). |
 | `phase-planner` | Creates and edits `docs/phases/Phase-*.md` files — the sprint/task source of truth. |
-| `phase-builder` | The orchestrator. Reads a phase file, groups sprints into parallel-safe waves, spawns implementation sub-agents, and won't advance a wave until it passes verification. |
+| `phase-builder` | The orchestrator. Reads a phase file, groups sprints into parallel-safe waves, spawns implementation sub-agents, and won't advance a wave until it passes verification. Optional worktree mode runs a phase on its own branch, so two sessions can build two phases at once. |
 | `phase-viewer` | Starts the live dashboard (`npx phase-viewer`) in the background and gives you its URL. Local sessions only. |
 
 ### Skills phase-builder runs for you
@@ -191,6 +195,8 @@ Two roots matter and phase-builder resolves both automatically at the start of e
 - **app_root** — where your code and its manifest file live
 
 Small projects often have these be the same folder. Larger ones split them — useful when you want the phase history to survive a full rewrite of the app itself.
+
+Worktree mode needs `docs/phases/` tracked in the same git repo as the code. If the phase docs sit outside the repo (a split layout), each session would write to the same phase folder, so `phase-builder` won't start a worktree run.
 
 You don't need to create these folders. `phase-planner` and `design-planner` make them the first time they run.
 
