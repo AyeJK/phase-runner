@@ -1,5 +1,6 @@
-# Store text as LF in the repo; check out with the platform default.
-* text=auto
+# Store and check out text as LF. The plugin directory's scanner refuses
+# any line-ending rule without eol=lf, even a bare text=auto.
+* text=auto eol=lf
 
 # Binary assets
 *.png binary
