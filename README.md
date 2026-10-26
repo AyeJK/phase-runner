@@ -28,9 +28,24 @@ Using Cursor or another agent, or want plain skills instead of a plugin? Install
 npx skills add AyeJK/phase-runner
 ```
 
-This copies the same nine skills into your project, without the `phase-runner:` prefix. The HUD is plugin-only.
+This copies the same nine skills into your project, without the `phase-runner:` prefix.
 
-Experimental: [Phase Runner HUD Claude mod](#claude-code-hud-experimental) (separate install).
+## Quick start
+
+**New project:**
+
+1. Type `/product-planner` and a sentence about your idea to get started. It interviews you and turns your idea into a product plan. Review and iterate until the plan matches what you want to build.
+2. Once you've reviewed your product plan, use `/design-planner` to come up with a visual style for your project and lock it in, with mockups of every screen. Once more, review and iterate until you like what you see.
+3. Once you're happy with your UI design, use `/phase-planner` to turn your plan and designs into phase plans.
+4. Use `/phase-viewer` to open the dashboard and review your phase plans before you build.
+5. When the phases look right, type `/phase-builder run phase 1`.
+
+**Existing project:**
+
+1. Whether it's a new feature, or a full refactor, talk through your idea in chat.
+2. When it feels solid, use `/phase-planner` to turn the conversation into phase plans.
+3. Use `/phase-viewer` to open the dashboard and review your phase plans before you build.
+4. When the phases look right, type `/phase-builder run phase 1`.
 
 ## How it works
 
@@ -38,12 +53,7 @@ Experimental: [Phase Runner HUD Claude mod](#claude-code-hud-experimental) (sepa
   <img src="docs/how-it-works.gif" alt="How Phase Runner works, one stage at a time, using phase-viewer's own build. Idea: product-planner writes the plan and weighs three options for who writes the run log, picking A3. Design: design-planner locks the palette, type and status badges. Plan: phase-planner lists seven phases and splits Phase 2 into sprints 2.1 to 2.5, with acceptance criteria. Build: phase-builder runs the sprints in four waves, with 2.2 and 2.3 in parallel, each on a fresh sub-agent. QA: verify fails Sprint 2.3 on two tests, retries with the failure attached, and passes. Sign off: Phase 2 ends at 27 of 28 tasks with one needing you, and you approve." width="100%">
 </p>
 
-1. **Plan the product.** Starting something new? Tell `product-planner` what you want to build. It turns the idea into a product plan: the options, how the data flows, and the open questions to settle. In a Claude app session the plan publishes as an artifact you can share.
-2. **Design it.** Run `design-planner` to lock in a design system and get HTML mockups of every screen before any code is written. In a Claude app session both publish as artifacts you can share and edit.
-3. **Break it into phases.** Ask `phase-planner` to turn the product plan, design system and mockups into phase plans, split into sprints and tasks, each with acceptance criteria.
-4. **Build it.** With the docs in place, say something like *"implement phase 1"*. `phase-builder` gets to work, and checks in with you when it hits a blocker or finishes the phase.
-
-Step 4 runs on its own. `phase-builder` groups sprints into parallel-safe waves and gives each sprint a fresh sub-agent, and UI sprints build against your design system. After every wave, `phase-verify` runs your build, typecheck and tests and reviews the diff against every acceptance criterion, and `phase-wave-test` checks UI work in a browser against your design system. A failed wave retries the same sprint with the failure attached, up to three times, then escalates to you. Only `phase-doc-sync` writes status back to the phase file, so the plan always matches what actually passed. Nothing ships past you.
+When you run a phase, `phase-builder` groups sprints into parallel-safe waves and gives each sprint a fresh sub-agent. Every sprint carries acceptance criteria, and UI sprints build against your design system. After every wave, `phase-verify` runs your build, typecheck and tests and reviews the diff against every acceptance criterion, and `phase-wave-test` checks UI work in a browser against your design system. A failed wave retries the same sprint with the failure attached, up to three times, then escalates to you. Only `phase-doc-sync` writes status back to the phase file, so the plan always matches what actually passed. Nothing ships past you.
 
 Want two phases going at once? Say *"run phase 4 in a worktree"* in a second session. That phase builds on its own branch in a git worktree, so neither session's verify gate trips over the other's half-written code. When the phase finishes, `phase-builder` merges the branch back and asks before removing the worktree.
 
@@ -89,7 +99,7 @@ In a Claude app session, the two planning skills publish what they write as Clau
 
 ### Claude Code HUD (experimental)
 
-[`phase-runner-hud`](hud/) is an experimental mod plugin for Claude Code built on an early-access API. It adds two things, and leaves the dashboard to phase-viewer:
+[`phase-runner-hud`](hud/) is an experimental mod plugin for Claude Code built on an early-access API.
 
 - **A toast** each time a run stops for you: an escalation (a gate failed on its last allowed attempt), a blocker (an implementer reported a blocked task), or the phase completing.
 - **`/phase-status`**, which prints the phase, how many tasks each sprint has done, the current wave and gate (`wave 2 · 8.3 verify 2/3`), and when the last event was logged. The mod answers it from the files on disk, with no model call and no tokens.
