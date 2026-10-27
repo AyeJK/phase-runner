@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{Feature name}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/*
+ * product-planner plan style, matching phase-viewer: top bar with the feature
+ * name, a section sidebar, an 880px content column, row lists on --surface,
+ * mono uppercase badges. Dark by default; light follows the system, and a host
+ * can pin either with data-theme on <html>. The wireframe kit further down has
+ * its own fixed values and doesn't follow the theme.
+ */
+:root {
+  color-scheme: dark;
+  --bg: #121110;
+  --surface: #1a1917;
+  --surface-2: #221f1c;
+  --border: #2e2b27;
+  --border-strong: #423d36;
+  --text: #ece8e1;
+  --text-2: #b3ada4;
+  --text-3: #8a837a;
+  --accent: #ffb000;
+  --accent-text: #ffc233;
+  --accent-bg: rgba(255, 176, 0, 0.1);
+  --passed: #4cd480;
+  --passed-bg: rgba(76, 212, 128, 0.1);
+  --running: #5ccfe6;
+  --running-bg: rgba(92, 207, 230, 0.08);
+  --failed: #f87171;
+  --failed-bg: rgba(248, 113, 113, 0.1);
+  --manual: #a78bfa;
+  --manual-bg: rgba(167, 139, 250, 0.1);
+
+  --sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+  --r: 6px;
+  --r-lg: 10px;
+  --r-sm: 4px;
+  --head: 56px;
+  --side: 264px;
+  --content: 880px;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #f7f5f1;
+    --surface: #ffffff;
+    --surface-2: #f2efe9;
+    --border: #e4dfd6;
+    --border-strong: #cfc8bc;
+    --text: #1f1c18;
+    --text-2: #544d44;
+    --text-3: #6e665c;
+    --accent-text: #905c00;
+    --accent-bg: rgba(255, 176, 0, 0.14);
+    --passed: #15803d;
+    --passed-bg: rgba(21, 128, 61, 0.08);
+    --running: #0d6f8a;
+    --running-bg: rgba(14, 116, 144, 0.06);
+    --failed: #b91c1c;
+    --failed-bg: rgba(185, 28, 28, 0.06);
+    --manual: #6d28d9;
+    --manual-bg: rgba(109, 40, 217, 0.07);
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f7f5f1;
+  --surface: #ffffff;
+  --surface-2: #f2efe9;
+  --border: #e4dfd6;
+  --border-strong: #cfc8bc;
+  --text: #1f1c18;
+  --text-2: #544d44;
+  --text-3: #6e665c;
+  --accent-text: #905c00;
+  --accent-bg: rgba(255, 176, 0, 0.14);
+  --passed: #15803d;
+  --passed-bg: rgba(21, 128, 61, 0.08);
+  --running: #0d6f8a;
+  --running-bg: rgba(14, 116, 144, 0.06);
+  --failed: #b91c1c;
+  --failed-bg: rgba(185, 28, 28, 0.06);
+  --manual: #6d28d9;
+  --manual-bg: rgba(109, 40, 217, 0.07);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.55 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-wrap: break-word;
+}
+h1, h2, h3, h4, p { margin: 0; }
+a { color: var(--accent-text); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code {
+  font: 13.5px var(--mono);
+  font-variant-ligatures: none;
+  background: var(--surface-2);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+strong { font-weight: 600; color: var(--text); }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+
+/* ---------- Top bar ---------- */
+
+.app-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 24px;
+  height: var(--head);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.project-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 20px/1.2 var(--sans);
+}
+.head-end {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  margin-left: auto;
+  font: 500 14px var(--sans);
+  color: var(--text-3);
+}
+
+/* ---------- Badges ---------- */
+
+.status, .tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 7px;
+  font: 600 12px/1 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border: 1px solid;
+  border-radius: var(--r-sm);
+}
+.status.draft { color: var(--accent-text); background: var(--accent-bg); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+.status.pass { color: var(--passed); background: var(--passed-bg); border-color: color-mix(in srgb, var(--passed) 45%, transparent); }
+.tag { font-weight: 500; color: var(--text-3); border-color: var(--border-strong); }
+
+/* ---------- Layout ---------- */
+
+.layout {
+  display: grid;
+  grid-template-columns: var(--side) minmax(0, 1fr);
+  min-height: calc(100vh - var(--head));
+}
+.side {
+  position: sticky;
+  top: var(--head);
+  align-self: start;
+  height: calc(100vh - var(--head));
+  overflow-y: auto;
+  padding: 20px 12px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+.side-h {
+  padding: 0 10px 10px;
+  font: 600 13px var(--sans);
+  color: var(--text-2);
+}
+.toc { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.toc a {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  column-gap: 8px;
+  padding: 8px 10px;
+  color: var(--text-2);
+  text-decoration: none;
+  border-radius: var(--r);
+}
+.toc a:hover { color: var(--text); background: var(--surface-2); }
+.toc a:focus-visible { outline-offset: -2px; }
+.toc a[aria-current="true"] {
+  color: var(--text);
+  background: var(--surface-2);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.toc .n { font: 500 13px/22px var(--mono); color: var(--text-3); }
+.toc .t { font: 500 15px/22px var(--sans); }
+
+main { min-width: 0; padding: 32px 40px 80px; }
+.page { max-width: var(--content); margin: 0 auto; }
+
+/* ---------- Page header ---------- */
+
+.eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  font: 500 12px/1.4 var(--mono);
+  color: var(--text-3);
+}
+.page-name {
+  font: 600 38px/1.2 var(--sans);
+  letter-spacing: -0.015em;
+}
+.lede { margin-top: 10px; font-size: 19px; line-height: 1.55; color: var(--text-2); }
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 14px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+.meta .sep { color: var(--border-strong); }
+
+/* ---------- Sections ---------- */
+
+section {
+  margin-top: 48px;
+  scroll-margin-top: calc(var(--head) + 20px);
+}
+.sec-h {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.sec-h .n { font: 500 15px var(--mono); color: var(--text-3); }
+.sec-h h2 { font: 600 22px/1.3 var(--sans); }
+
+h3 {
+  margin: 32px 0 10px;
+  font: 600 17px/1.4 var(--sans);
+  color: var(--text);
+}
+.sec-h + h3 { margin-top: 0; }
+.label { font: 600 13px/1.5 var(--sans); color: var(--text-3); }
+
+.prose { display: grid; gap: 14px; color: var(--text-2); font-size: 17px; line-height: 1.65; }
+.muted { color: var(--text-2); }
+
+/* Bullets: small squares, like the viewer's acceptance criteria. */
+.bullets { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; color: var(--text-2); }
+.bullets li { display: flex; gap: 10px; }
+.bullets li::before {
+  content: '';
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  margin-top: 8px;
+  background: var(--bullet, var(--accent));
+}
+.bullets.pass { --bullet: var(--passed); }
+.bullets.fail { --bullet: var(--failed); }
+.bullets.quiet { --bullet: var(--border-strong); }
+.bullets.big { font-size: 17px; line-height: 1.6; }
+.bullets.big li::before { margin-top: 10px; }
+
+/* A panel on --surface; `.rows` is a bordered list with dividers. */
+.panel, .rows {
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+}
+.panel { padding: 16px 18px; }
+.rows { margin: 0; padding: 0; list-style: none; overflow: hidden; }
+.rows > * + * { border-top: 1px solid var(--border); }
+.row { padding: 14px 16px; min-width: 0; }
+.row.sel { box-shadow: inset 2px 0 0 var(--passed); }
+
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.panel .label { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+
+/* Row head: id, title, end item. */
+.row-h {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 12px;
+}
+.row-h .id { font: 500 14px/24px var(--mono); color: var(--text-3); }
+.row-h .end, .row-h .status, .row-h .tag, .row-h .manual { margin-top: 1px; }
+.row-h .name { font: 500 17px/1.4 var(--sans); }
+.row-h .end { font: 500 13px var(--mono); color: var(--text-3); white-space: nowrap; }
+.row-b { margin: 8px 0 0 40px; display: grid; gap: 12px; color: var(--text-2); }
+.row.dim .name { color: var(--text-2); }
+
+.pc { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.pc .label { margin-bottom: 6px; }
+.why { font-size: 14.5px; color: var(--text-3); }
+
+/* Label / value pairs inside decision and question rows. */
+.kv { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 6px 12px; font-size: 16px; }
+.kv dt { font: 600 13px/24px var(--sans); color: var(--text-3); }
+.kv dd { margin: 0; color: var(--text-2); }
+
+/* ---------- Diagram ---------- */
+
+.diagram { overflow-x: auto; padding: 8px; }
+.diagram svg { min-width: 680px; width: 100%; height: auto; display: block; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 12px; font-size: 14.5px; color: var(--text-2); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.legend span::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1.5px solid var(--sw);
+  background: var(--swf);
+}
+.n-user { fill: var(--accent-bg); stroke: var(--accent); stroke-width: 1.5; }
+.n-sys { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.5; }
+.n-ext { fill: var(--running-bg); stroke: var(--running); stroke-width: 1.5; }
+.n-store { fill: var(--passed-bg); stroke: var(--passed); stroke-width: 1.5; }
+.diagram .t { fill: var(--text); font: 600 14px var(--sans); }
+.diagram .ts { fill: var(--text-3); font: 400 13px var(--sans); }
+.diagram .ln { stroke: var(--text-3); stroke-width: 1.5; fill: none; }
+.diagram .dash { stroke-dasharray: 5 4; }
+.diagram .zone { fill: none; stroke: var(--border-strong); stroke-width: 1; stroke-dasharray: 3 4; }
+.diagram .zt { fill: var(--text-3); font: 500 13px var(--mono); letter-spacing: .06em; }
+.diagram .ah { fill: var(--text-3); }
+
+/* ---------- Phone wireframes ---------- */
+
+/*
+ * Wireframes are a standard kit of their own, not the plan's design: grey
+ * paper, grey ink, one blue for annotations. Fixed values on .phone, so they
+ * look the same in every plan and in both themes, and never suggest the
+ * product's visual design (that comes from design-planner).
+ */
+.phones { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
+.phone-wrap { min-width: 0; }
+.phone-cap { display: flex; gap: 8px; margin-bottom: 8px; font: 500 15px var(--sans); color: var(--text-2); }
+.phone-cap .n { font-family: var(--mono); color: var(--text-3); }
+.phone {
+  --wf-paper: #f4f4f2;
+  --wf-fill: #e2e2df;
+  --wf-line: #8e8e8a;
+  --wf-ink: #3a3a38;
+  --wf-ink-2: #6b6b67;
+  --wf-note: #2563eb;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 440px;
+  padding: 14px 12px 16px;
+  font: 400 13px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: var(--wf-ink);
+  background: var(--wf-paper);
+  border: 2px solid var(--wf-ink);
+  border-radius: 22px;
+}
+.phone strong { color: inherit; }
+.phone .bar {
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 6px;
+  font-size: 12px;
+  color: var(--wf-ink-2);
+  border-bottom: 1.5px solid var(--wf-line);
+}
+.wf { padding: 8px 10px; border: 1.5px solid var(--wf-line); border-radius: 4px; }
+.wf.dash { border-style: dashed; color: var(--wf-ink-2); text-align: center; }
+.wf.img {
+  height: 110px;
+  display: grid;
+  place-items: center;
+  color: var(--wf-ink-2);
+  background: repeating-linear-gradient(45deg, var(--wf-fill) 0 6px, transparent 6px 12px);
+}
+.wf.win { border: 2.5px solid var(--wf-ink); }
+.wf.warn, .wf.err { border-style: dashed; border-color: var(--wf-ink); background: var(--wf-fill); }
+.btn { padding: 9px 10px; text-align: center; font-weight: 600; border: 1.5px solid var(--wf-ink); border-radius: 4px; }
+.btn.primary { background: var(--wf-ink); color: var(--wf-paper); }
+.btn.ghost { border-style: dashed; font-weight: 500; }
+.line { display: flex; justify-content: space-between; gap: 8px; font-variant-numeric: tabular-nums; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { padding: 1px 9px; font-size: 12px; border: 1.5px solid var(--wf-line); border-radius: 999px; }
+.chip.on { border-color: var(--wf-ink); background: var(--wf-fill); font-weight: 600; }
+.slots { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.slot { height: 74px; display: grid; place-items: center; text-align: center; font-size: 12px; color: var(--wf-ink-2); border: 1.5px dashed var(--wf-line); border-radius: 4px; }
+.slot.filled { border-style: solid; background: var(--wf-fill); color: var(--wf-ink); }
+.note { font-size: 11px; font-weight: 600; line-height: 1.35; color: var(--wf-note); }
+.small { font-size: 12px; color: var(--wf-ink-2); }
+.spacer { flex: 1; }
+
+/* ---------- Risks table ---------- */
+
+.tbl { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 16px; }
+th, td { padding: 10px 12px; text-align: left; vertical-align: top; border-top: 1px solid var(--border); }
+thead th { border-top: 0; font: 600 13px var(--sans); color: var(--text-3); background: var(--surface-2); }
+td { color: var(--text-2); }
+td:first-child { color: var(--text); }
+.lvl { font: 500 12px/24px var(--mono); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+.lvl.h { color: var(--failed); }
+.lvl.m { color: var(--accent-text); }
+.lvl.l { color: var(--text-3); }
+.manual { font: 500 12px var(--mono); letter-spacing: .06em; color: var(--manual); }
+
+pre {
+  margin: 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  font: 14.5px/1.6 var(--mono);
+  font-variant-ligatures: none;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  white-space: pre-wrap;
+}
+
+/* ---------- Breakpoints ---------- */
+
+@media (min-width: 720px) and (max-width: 1099px) {
+  :root { --side: 232px; }
+  .app-head { padding: 0 20px; }
+  main { padding: 28px 28px 64px; }
+}
+@media (max-width: 719px) {
+  :root { --head: 52px; }
+  .app-head { gap: 12px; padding: 0 16px; }
+  .project-name { font-size: 17px; }
+  .page-name { font-size: 30px; }
+  .prose, .bullets.big, .row-h .name { font-size: 16px; }
+  .head-end .words { display: none; }
+  .layout { display: block; }
+  .side { display: none; }
+  main { padding: 20px 16px 56px; }
+  section { margin-top: 40px; }
+  .two, .pc { grid-template-columns: 1fr; }
+  .row-b { margin-left: 0; }
+  .kv { grid-template-columns: 1fr; gap: 2px; }
+  .kv dd + dt { margin-top: 8px; }
+}
+</style>
+</head>
+<body>
+
+<!--
+  product-planner template. Copy this file, keep the <style> and <script> as they are,
+  and replace every {placeholder}. Each section shows one example of each pattern:
+  repeat the pattern as many times as the plan needs and delete what it doesn't use.
+-->
+
+<header class="app-head">
+  <span class="project-name">{Feature name}</span>
+  <div class="head-end">
+    <span class="words">Product plan</span>
+    <!-- Draft: status draft. In Review: tag. Approved: status pass. -->
+    <span class="status draft">Draft</span>
+  </div>
+</header>
+
+<div class="layout">
+
+<nav class="side" aria-label="Plan sections">
+  <div class="side-h">Sections</div>
+  <ul class="toc">
+    <li><a href="#overview"><span class="n">1</span><span class="t">Overview</span></a></li>
+    <li><a href="#dataflow"><span class="n">2</span><span class="t">Data flow</span></a></li>
+    <li><a href="#options"><span class="n">3</span><span class="t">Options considered</span></a></li>
+    <li><a href="#mockups"><span class="n">4</span><span class="t">UI mockups</span></a></li>
+    <li><a href="#decisions"><span class="n">5</span><span class="t">Technical decisions</span></a></li>
+    <li><a href="#questions"><span class="n">6</span><span class="t">Open questions &amp; risks</span></a></li>
+    <li><a href="#handoff"><span class="n">7</span><span class="t">Implementation handoff</span></a></li>
+  </ul>
+</nav>
+
+<main>
+<div class="page">
+
+<header>
+  <h1 class="page-name">{Feature name}</h1>
+  <p class="lede">{One-line description}</p>
+  <div class="meta">
+    <span>{Mon D, YYYY}</span>
+  </div>
+</header>
+
+<section id="overview">
+  <div class="sec-h"><span class="n">1</span><h2>Overview</h2></div>
+  <h3>What we're building</h3>
+  <div class="prose">
+    <p>{2 to 4 sentences}</p>
+  </div>
+  <h3>Why</h3>
+  <div class="prose">
+    <p>{The user need or problem being solved}</p>
+  </div>
+  <h3>What success looks like</h3>
+  <ul class="bullets big">
+    <li><span>{Measurable outcome}</span></li>
+  </ul>
+  <h3>Scope</h3>
+  <div class="two">
+    <div class="panel">
+      <div class="label"><span class="status pass">In</span></div>
+      <ul class="bullets pass">
+        <li><span>{In scope}</span></li>
+      </ul>
+    </div>
+    <div class="panel">
+      <div class="label"><span class="tag">Out</span></div>
+      <ul class="bullets quiet">
+        <li><span>{Out of scope}</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="dataflow">
+  <div class="sec-h"><span class="n">2</span><h2>Data flow</h2></div>
+  <div class="legend">
+    <span style="--sw: var(--accent); --swf: var(--accent-bg);">User action</span>
+    <span style="--sw: var(--border-strong); --swf: var(--surface-2);">System component</span>
+    <span style="--sw: var(--running); --swf: var(--running-bg);">External API</span>
+    <span style="--sw: var(--passed); --swf: var(--passed-bg);">Data store</span>
+  </div>
+  <div class="panel diagram">
+    <!-- Node classes: n-user, n-sys, n-ext, n-store. Text: t (label), ts (sub-label).
+         Lines: ln (+ dash). Zones: zone + zt. No inline colours. -->
+    <svg viewBox="0 0 800 400" role="img" aria-label="{What the diagram shows}">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="ah" d="M0,0 L10,5 L0,10 z"/>
+        </marker>
+      </defs>
+      <rect class="zone" x="200" y="10" width="190" height="380" rx="8"/>
+      <text class="zt" x="212" y="30">{ZONE}</text>
+      <rect class="n-user" x="20" y="50" width="160" height="50" rx="6"/>
+      <text class="t" x="100" y="80" text-anchor="middle">{User action}</text>
+      <rect class="n-sys" x="215" y="50" width="160" height="50" rx="6"/>
+      <text class="t" x="295" y="73" text-anchor="middle">{Component}</text>
+      <text class="ts" x="295" y="90" text-anchor="middle">{detail}</text>
+      <path class="ln" d="M180,75 L215,75" marker-end="url(#ah)"/>
+    </svg>
+  </div>
+  <div class="prose" style="margin-top: 16px">
+    <p>{The flow in plain English}</p>
+  </div>
+</section>
+
+<section id="options">
+  <div class="sec-h"><span class="n">3</span><h2>Options considered</h2></div>
+  <ul class="rows">
+    <!-- Selected: class "row sel" + status pass. Rejected / Deferred: class "row dim" + tag. -->
+    <li class="row sel">
+      <div class="row-h"><span class="id">A</span><span class="name">{Option name}</span><span class="status pass">Selected</span></div>
+      <div class="row-b">
+        <p>{One-line description}</p>
+        <div class="pc">
+          <div><div class="label">For</div><ul class="bullets pass"><li><span>{Pro}</span></li></ul></div>
+          <div><div class="label">Against</div><ul class="bullets fail"><li><span>{Con}</span></li></ul></div>
+        </div>
+        <p class="why">Selected: {reason}</p>
+      </div>
+    </li>
+    <li class="row dim">
+      <div class="row-h"><span class="id">B</span><span class="name">{Option name}</span><span class="tag">Rejected</span></div>
+      <div class="row-b">
+        <p>{One-line description}</p>
+        <div class="pc">
+          <div><div class="label">For</div><ul class="bullets pass"><li><span>{Pro}</span></li></ul></div>
+          <div><div class="label">Against</div><ul class="bullets fail"><li><span>{Con}</span></li></ul></div>
+        </div>
+        <p class="why">Rejected: {reason}</p>
+      </div>
+    </li>
+  </ul>
+</section>
+
+<section id="mockups">
+  <div class="sec-h"><span class="n">4</span><h2>UI mockups</h2></div>
+  <p class="muted" style="margin-bottom: 16px">Wireframes for structure only. Visual design comes from design-planner. Blue notes label interactive elements.</p>
+  <!-- Wireframe kit: everything inside .phone uses only the kit's classes
+       (bar, wf, wf dash/img/win/warn/err, btn, btn primary/ghost, line, chips, chip, chip on,
+       slots, slot, slot filled, note, small, spacer). Never the plan's classes or tokens. -->
+  <div class="phones">
+    <div class="phone-wrap">
+      <div class="phone-cap"><span class="n">1</span>{Screen name}</div>
+      <div class="phone">
+        <div class="bar"><span>{Screen title}</span><span>≡</span></div>
+        <div class="small">{Helper text}</div>
+        <div class="btn primary">{Primary action}</div>
+        <div class="note">Button: {what it does}</div>
+        <div class="wf"><div class="line"><span>{Row label}</span><span>{value}</span></div></div>
+        <div class="spacer"></div>
+        <div class="btn ghost">{Secondary action}</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="decisions">
+  <div class="sec-h"><span class="n">5</span><h2>Technical decisions</h2></div>
+  <ol class="rows">
+    <li class="row">
+      <div class="row-h"><span class="id">01</span><span class="name">{What was decided}</span></div>
+      <dl class="kv row-b">
+        <dt>Rationale</dt><dd>{Why}</dd>
+        <dt>Constraints</dt><dd>{What this rules out}</dd>
+      </dl>
+    </li>
+  </ol>
+</section>
+
+<section id="questions">
+  <div class="sec-h"><span class="n">6</span><h2>Open questions &amp; risks</h2></div>
+  <h3>Questions</h3>
+  <ol class="rows">
+    <li class="row">
+      <div class="row-h"><span class="id">Q1</span><span class="name">{Question}</span><span class="end">{Owner}</span></div>
+      <dl class="kv row-b"><dt>Impact</dt><dd>{What depends on the answer}</dd><dt>Suggested</dt><dd>{Suggested answer, if any}</dd></dl>
+    </li>
+  </ol>
+  <h3>Risks</h3>
+  <div class="panel tbl" style="padding: 0; overflow: hidden">
+    <div class="tbl">
+    <table>
+      <thead><tr><th>Risk</th><th>Likelihood</th><th>Impact</th><th>Mitigation</th></tr></thead>
+      <tbody>
+        <!-- Levels: lvl h (High), lvl m (Medium), lvl l (Low). A user-only task: <span class="manual">MANUAL</span>. -->
+        <tr><td>{Risk}</td><td><span class="lvl m">Medium</span></td><td><span class="lvl h">High</span></td><td>{Mitigation}</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<section id="handoff">
+  <div class="sec-h"><span class="n">7</span><h2>Implementation handoff</h2></div>
+  <div class="prose">
+    <p><strong>What this plan produces:</strong> {summary}</p>
+    <p><strong>First sprint:</strong> {first sprint}</p>
+  </div>
+  <h3>Key constraints for implementation agents</h3>
+  <ul class="bullets big">
+    <li><span>{Constraint}</span></li>
+  </ul>
+  <h3>Suggested phases (non-binding)</h3>
+  <ol class="rows">
+    <li class="row">
+      <div class="row-h"><span class="id">1</span><span class="name">{Phase name}</span></div>
+      <p class="row-b">{What the phase covers}</p>
+    </li>
+  </ol>
+  <h3>Generate phase plan</h3>
+<pre>Use this plan as input: docs/Plan-{FeatureName}-{YYYY-MM-DD}.html
+Generate a phase plan for {feature name}. Stack: {stack}.
+First phase goal: {first phase goal}.</pre>
+</section>
+
+</div>
+</main>
+</div>
+
+<script>
+// Mark the sidebar row for the section in view.
+(function () {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+  var secs = links.map(function (a) { return document.querySelector(a.getAttribute('href')); });
+  function update() {
+    var y = window.scrollY + 120, cur = 0;
+    secs.forEach(function (s, i) { if (s && s.offsetTop <= y) cur = i; });
+    if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 2) cur = secs.length - 1;
+    links.forEach(function (a, i) { a.setAttribute('aria-current', i === cur ? 'true' : 'false'); });
+  }
+  window.addEventListener('scroll', update, { passive: true });
+  update();
+})();
+</script>
+</body>
+</html>
