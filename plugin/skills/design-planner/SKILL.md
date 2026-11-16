@@ -10,13 +10,13 @@ Establishes **visual language and screen contracts** after a scope/rebuild plan 
 **Pipeline position:**
 
 ```
-Scope doc (what/why/architecture)
+product-planner plan or scope doc (what/why/architecture)
     → design-planner (this skill)
     → phase-planner (sprints)
     → phase-builder (build)
 ```
 
-**Not this skill:** Architecture, API design, sprint breakdown, or implementation. Use scope docs + phase-planner + phase-builder for those. Use `product-planner` only for non-UI product exploration — not as a substitute for this step.
+**Not this skill:** Architecture, API design, sprint breakdown, or implementation. Use scope docs + phase-planner + phase-builder for those. `product-planner` plans the product, and its wireframes fix layout and flow only. It is not a substitute for this step: a plan with UI Mockups comes here next, and phase-planner stops on one that has no design pass.
 
 For file templates, token schema, and screen-spec format, see [reference.md](reference.md).
 
@@ -64,7 +64,7 @@ If `docs/design/` already exists, read all files before editing. Preserve locked
 
 Read in order:
 
-1. **Scope doc** — user path or pasted plan (e.g. a rebuild plan or product spec under `docs/`). Extract product name, audience, UI surfaces mentioned, hard UX rules, stack (web framework, desktop shell, etc.).
+1. **Scope doc** — user path or pasted plan (e.g. a rebuild plan or product spec under `docs/`). Extract product name, audience, UI surfaces mentioned, hard UX rules, stack (web framework, desktop shell, etc.). With no path given, use the newest `docs/Plan-*.html` from product-planner if there is one, and say which file you picked. Its UI Mockups section lists the screens; take layout and flow from the wireframes, never visual style.
 2. **Project convention docs** — `CLAUDE.md` / `README.md` / equivalent, for terminology and conventions the project already uses (many products have their own vocabulary for core concepts — use whatever the scope doc or existing docs establish, don't invent new terms).
 3. **Existing design** — `docs/design/*`, root `DESIGN.md`, prior prototypes.
 4. **App context** — skim `app_root`'s manifest file, existing routes/components if UI already exists. Note what to extend vs. replace.
@@ -332,7 +332,7 @@ Copies what changed on a published page into the files, and what changed in the 
 | **phase-builder** | Build — reads `design-system.md`; wave-test asserts against it |
 | **A frontend-design-style skill, if available** | Direction workshop + optional prototypes only — not production UI |
 | **A ui-pattern skill, if available** | Implementation patterns during phase-builder — loses to project design docs |
-| **product-planner** | Non-UI product planning — do not use for design-system output |
+| **product-planner** | The step before this one — product plan and wireframes, no visual design. Its plan is a valid scope doc |
 | **Artifact tool with a Design System type, if the session has one** | Step 7 publishes the design system; Design sync keeps its page and the files the same. No skill builds from the artifact |
 | **Artifact tool with a Design type, if the session has one** | Step 6 publishes the mockups as artboards on one canvas; Design sync keeps each artboard and its screen file the same. No skill builds from the canvas |
 

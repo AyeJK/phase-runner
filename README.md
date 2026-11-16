@@ -153,8 +153,8 @@ These are the five you talk to. Everything else runs on its own.
 
 | Skill | Job |
 |---|---|
-| `product-planner` | Turns a rough idea into a rich HTML plan doc — options considered, data flow, open questions. Optional first step. In Claude app sessions it publishes the plan as a hosted page ([Claude artifacts](#claude-artifacts)). |
-| `design-planner` | Locks a visual design system and per-screen specs *before* implementation starts. In Claude app sessions it publishes a Design System artifact and a Design canvas ([Claude artifacts](#claude-artifacts)). |
+| `product-planner` | Turns a rough idea into a rich HTML plan doc — options considered, data flow, open questions. Optional first step. When the plan has screens, it hands off to `design-planner` next. In Claude app sessions it publishes the plan as a hosted page ([Claude artifacts](#claude-artifacts)). |
+| `design-planner` | Locks a visual design system and per-screen specs *before* implementation starts. The standard step between product-planner and phase-planner for anything with a UI; `phase-planner` stops on a plan with screens and no design pass unless you say `skip design`. In Claude app sessions it publishes a Design System artifact and a Design canvas ([Claude artifacts](#claude-artifacts)). |
 | `phase-planner` | Creates and edits `docs/phases/Phase-*.md` files — the sprint/task source of truth. |
 | `phase-builder` | The orchestrator. Reads a phase file, groups sprints into parallel-safe waves, spawns implementation sub-agents, and won't advance a wave until it passes verification. Optional worktree mode runs a phase on its own branch, so two sessions can build two phases at once. |
 | `phase-viewer` | Starts the live dashboard (`npx phase-viewer`) in the background and gives you its URL. Local sessions only. |

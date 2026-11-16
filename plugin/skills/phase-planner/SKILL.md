@@ -78,14 +78,29 @@ Turn a plan (a chat, a spec, a product-planner doc) into a new phase file. This 
 **Input:** What the phase delivers, plus whatever plan material the user has.
 
 **Steps:**
-1. If the design is published, bring the files up to date first (Design sync, below)
-2. Look for `docs/phases/` at the workspace root. If it doesn't exist, create it. No setup script is needed first
-3. Pick the phase number: one higher than the highest existing `Phase-{N}-*.md`, or `1` if there are none
-4. Write `docs/phases/Phase-{N}-{Name}.md` from the full template in [reference.md](reference.md): phase goal, then sprints, each with Goal, Tasks, Acceptance Criteria, Dependencies and **Verification**
-5. Every task starts at Status `—`, except a task only the user can do, which starts at `MANUAL` (not `—` with "(manual)" in the text). Use the sparse-row rules for Module and Reference
-6. Show the user the sprint list and ask them to confirm before `run phase {N}`
+1. Run the Design check (below). If it says stop, stop there and write nothing
+2. If the design is published, bring the files up to date first (Design sync, below)
+3. Look for `docs/phases/` at the workspace root. If it doesn't exist, create it. No setup script is needed first
+4. Pick the phase number: one higher than the highest existing `Phase-{N}-*.md`, or `1` if there are none
+5. Write `docs/phases/Phase-{N}-{Name}.md` from the full template in [reference.md](reference.md): phase goal, then sprints, each with Goal, Tasks, Acceptance Criteria, Dependencies and **Verification**
+6. Every task starts at Status `—`, except a task only the user can do, which starts at `MANUAL` (not `—` with "(manual)" in the text). Use the sparse-row rules for Module and Reference
+7. Show the user the sprint list and ask them to confirm before `run phase {N}`
 
 Never overwrite an existing phase file. If `Phase-{N}` already exists, use the next number or ask.
+
+**Design check.** The design pass (design-planner) comes before phase planning for anything with screens. Check once per planning request, before Design sync:
+
+- **The input is a product-planner plan (`docs/Plan-*.html`) that has a `<section id="mockups">`, and `docs/design/DESIGN.md` doesn't exist:** stop. Write no phase file, and reply:
+
+  ```
+  This plan has UI, but there's no design pass yet (docs/design/DESIGN.md is missing).
+  Run design-planner first: "Use {plan path} as input. Run the design pass."
+  Or say "skip design" to plan without one.
+  ```
+
+- **The request says `skip design`** (or the user says it after the stop): plan as normal. UI sprints get no screen-spec references, and the sprint-list confirmation (step 7) says in one line that the phase was planned without a design pass.
+- **Any other input (a chat, a spec) that adds new screens, with no `docs/design/DESIGN.md`:** don't stop. Add one line to the sprint-list confirmation: `No design pass found, so UI sprints will match the existing code's look. Run design-planner first if these screens need a new design.`
+- **`docs/design/DESIGN.md` exists, or the input has no UI:** carry on.
 
 **Design sync.** A design published by design-planner can be changed on its page (the Design canvas, the Design System page) as well as in the files. `docs/design/DESIGN.md` records the pages in the lines under its title, as `Design system artifact: {url}` and `Design canvas: {url}`. If either line is there and the session has an Artifact tool, run the design-planner skill's Design sync (`design-sync.md`, beside its SKILL.md) before reading `docs/design/`. It copies what changed on the page into the files, and what changed in the files onto the page, without asking.
 

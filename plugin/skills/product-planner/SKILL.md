@@ -1,11 +1,11 @@
 ---
 name: product-planner
-description: "Plans out a product, product feature, or set of related features and produces a rich HTML planning document. Use when the user wants to plan a new feature, explore implementation options, design a product flow, or create a visual spec before generating phase plans. Output is a self-contained HTML file saved to docs/ and presented as a viewable artifact. The HTML includes: overview, data flow diagram, options considered, UI mockups, technical decisions, and open questions. Designed to feed directly into phase-planner for phase plan generation. Trigger phrases: 'plan this feature', 'help me think through', 'create a product plan', 'plan out', 'I want to build', 'design the flow for', 'what are my options for', 'spec this out'."
+description: "Plans out a product, product feature, or set of related features and produces a rich HTML planning document. Use when the user wants to plan a new feature, explore implementation options, design a product flow, or create a visual spec before generating phase plans. Output is a self-contained HTML file saved to docs/ and presented as a viewable artifact. The HTML includes: overview, data flow diagram, options considered, UI mockups, technical decisions, and open questions. Feeds design-planner when the plan has UI, then phase-planner for phase plan generation. Trigger phrases: 'plan this feature', 'help me think through', 'create a product plan', 'plan out', 'I want to build', 'design the flow for', 'what are my options for', 'spec this out'."
 ---
 
 # Product Planner
 
-Produces a rich, self-contained **HTML planning document** from a product or feature description. This document serves as the primary reference for implementation agents and feeds into `phase-planner` for phase plan generation.
+Produces a rich, self-contained **HTML planning document** from a product or feature description. This document serves as the primary reference for implementation agents. When it has UI Mockups it feeds `design-planner` first, then `phase-planner` for phase plan generation; with no UI surface it goes straight to `phase-planner`.
 
 The output is NOT markdown. It is a single navigable HTML file with visual sections, SVG diagrams, and mockups — something you'll actually open and read.
 
@@ -129,9 +129,18 @@ The document has a **top bar**, a **left sidebar** of numbered section links, an
 - Include real risks (technical, scope, dependency) with likelihood and impact notes
 
 **8. Implementation Handoff**
+- **The next step**, which depends on section 5:
+  - **The plan has UI Mockups:** the next step is the design pass. The wireframes here fix layout and flow only; design-planner locks the visual system and the screen specs that phase-planner and phase-builder build from. Say so in one line, then give a "Run Design Pass" prompt the user can copy-paste to design-planner:
+
+```
+Use this plan as input: [path to this HTML file]
+Run the design pass for [feature name].
+```
+
+  - **UI Mockups omitted (no UI surface):** say so in one line ("No UI surface, so no design pass is needed.") and go straight to the phase-planner prompt below
 - A crisp summary for phase-planner: what this plan produces, what the first sprint should accomplish, key constraints the implementation agent needs to know
 - Suggested phase structure (rough, non-binding): e.g. "Phase 1: API integration → Phase 2: UI → Phase 3: Polish"
-- A "Generate Phase Plan" prompt the user can copy-paste to phase-planner:
+- A "Generate Phase Plan" prompt the user can copy-paste to phase-planner. When the plan has UI Mockups, label it as the step after the design pass:
 
 ```
 Use this plan as input: [path to this HTML file]
@@ -186,10 +195,24 @@ These are defaults for the **planning document itself** (a tool for you to read 
 1. Write the file to `docs/Plan-{FeatureName}-{YYYY-MM-DD}.html` in the project folder
 2. If the session can publish the file as an artifact, publish it (see below). If it can't, skip this step
 3. Present it to the user: the file path, plus the artifact link if step 2 published one
-4. Offer the user two follow-up options:
+4. Offer the user the follow-up options. **The plan has UI Mockups:**
 
 ```
 Plan saved. Next steps:
+
+1. **Run the design pass** — hand this off to design-planner:
+   "Use docs/Plan-{name}.html as input. Run the design pass for {feature}."
+   It locks the visual style and writes a spec and mockup for every screen.
+   Phase planning comes after it, from the plan and docs/design/.
+
+2. **Iterate on the plan** — tell me what to adjust: add a section, revise an option,
+   update the data flow, add mockups for a specific screen, etc.
+```
+
+**UI Mockups omitted (no UI surface):**
+
+```
+Plan saved. No UI surface, so no design pass is needed. Next steps:
 
 1. **Generate phase plans** — hand this off to phase-planner:
    "Use docs/Plan-{name}.html as input. Generate phase plans for {feature}."
@@ -223,13 +246,16 @@ Rules for every publish:
 
 ---
 
-## Step 5 — Handoff to Phase Planner (if requested)
+## Step 5 — Handoff to the next step (if requested)
 
-If the user asks to proceed to phase planning immediately after the plan is created:
+If the user asks to proceed immediately after the plan is created ("go", "next", "build it", "plan the phases"):
 
 1. Read the Implementation Handoff section from the plan file
-2. Invoke the `phase-planner` skill with the plan's file path (`docs/Plan-{name}.html`) as context
-3. The phase plans go to `docs/phases/Phase-{N}-{Name}.md` as normal markdown — the HTML plan is the *input spec*, not the output format
+2. **The plan has UI Mockups:** invoke the `design-planner` skill with the plan's file path (`docs/Plan-{name}.html`) as its scope doc. Do this even when the user asked for phase plans: say in one line that the design pass comes first and why. design-planner hands off to phase-planner when it's done
+3. **UI Mockups omitted:** invoke the `phase-planner` skill with the plan's file path as context
+4. The phase plans go to `docs/phases/Phase-{N}-{Name}.md` as normal markdown — the HTML plan is the *input spec*, not the output format
+
+**Skipping the design pass.** Only when the user says so in as many words ("skip design", "no design pass"). Then invoke phase-planner and include `skip design` in the request, so its design check doesn't stop it.
 
 The HTML plan file persists as the reference. `phase-planner` and the implementation agents spawned by `phase-builder` are pointed at its file path for full context — never at the artifact URL, even when one exists. They read `docs/`, and an artifact link is not something they can rely on being able to open.
 
@@ -268,5 +294,5 @@ The edit goes into the file first; the artifact is updated from the file, never 
 - [ ] The template's `<style>` and `<script>` are copied unchanged; any added rule uses its tokens
 - [ ] Header holds only the name, the one-line description and the date; the status badge is in the top bar
 - [ ] Wireframes use only the wireframe kit's classes, with blue notes on every interactive element
-- [ ] Implementation Handoff section includes the phase-planner prompt, with the file path
+- [ ] Implementation Handoff names the next step: the design-pass prompt first when the plan has UI Mockups, then the phase-planner prompt, each with the file path
 - [ ] File saved to `docs/` (not inside the app subfolder)
