@@ -15,19 +15,26 @@
  * lines say are running or built (`liveTaskCounts`): they leave the
  * not-started segment for `built` and `active`, both in the running colour,
  * so the bar fills while the sprint is implemented and turns green at doc
- * sync.
+ * sync. They also pass `reworking` while the card is in a gate or failed
+ * state: its done tasks are drawn as `rework`, in the running colour, so a
+ * sprint reopened after doc sync (a retry, or fixes after a pass with notes)
+ * never shows an all-green bar while work is still going on.
  * Styles: `.seg-bar` in `styles/app.css`.
  */
 import type { Progress, TaskStatus } from '../../core/model.js';
 import type { NotStarted } from '../data/status.js';
 import type { LiveTaskCounts } from '../sprint/status.js';
 
-/** A segment: a task status, or `built` for tasks built during a run and not yet synced. */
-type Segment = TaskStatus | 'built';
+/**
+ * A segment: a task status, `built` for tasks built during a run and not yet
+ * synced, or `rework` for done tasks in a sprint that is being worked on again.
+ */
+type Segment = TaskStatus | 'built' | 'rework';
 
 /** Segment order and words. */
 const SEGMENTS: readonly [Segment, string][] = [
   ['done', 'complete'],
+  ['rework', 'complete, being reworked'],
   ['built', 'built'],
   ['active', 'running'],
   ['blocked', 'blocked'],
@@ -42,6 +49,7 @@ export function StatusSegments({
   progress,
   notStarted,
   live,
+  reworking = false,
   testId,
 }: {
   progress: Progress | undefined;
@@ -49,8 +57,11 @@ export function StatusSegments({
   notStarted?: NotStarted;
   /** Not-started tasks that are running or built in the run under way (see the module comment). */
   live?: LiveTaskCounts;
+  /** The sprint is being worked on again: done tasks are drawn in the running colour (see the module comment). */
+  reworking?: boolean;
   testId?: string;
 }) {
+  const done = progress?.byStatus.done ?? 0;
   const allTodo = progress?.byStatus.todo ?? 0;
   const built = Math.min(live?.built ?? 0, allTodo);
   const running = Math.min(live?.running ?? 0, allTodo - built);
@@ -61,6 +72,8 @@ export function StatusSegments({
     manual: manual - quietManual,
     active: (progress?.byStatus.active ?? 0) + running,
     built,
+    done: reworking ? 0 : done,
+    rework: reworking ? done : 0,
   };
   const count = (s: Segment): number => counts[s] ?? progress?.byStatus[s as TaskStatus] ?? 0;
   const parts = SEGMENTS.map(([status, word]) => ({ status, word, n: count(status) })).filter((p) => p.n > 0);

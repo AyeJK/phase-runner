@@ -541,6 +541,38 @@ describe('sprint card states', () => {
     expect(card(v, '8.1').failure?.note.gate).toBe('wave_test');
   });
 
+  it('shows the pass with notes a sprint was reopened to fix, after doc sync, through its re-verify', () => {
+    const ui: SprintSpec = ['8.1', 'xx', '- ui: /'];
+    const passed: LineSpec[] = [
+      head[0]!,
+      [2, 1, '8.1', 'verify', 'partial', 1, 'criteria 11/13 met'],
+      [3, 1, '8.1', 'wave_test', 'warn', 1, 'blank screen for 7 s'],
+      [4, 1, '8.1', 'doc_sync', 'pass', 1],
+    ];
+    const view = (lines: LineSpec[]): RailSprint => card(rail(makeProject([{ n: 8, sprints: [ui], log: jsonl(lines) }]), 8), '8.1');
+    expect(view(passed)).toMatchObject({ state: 'complete', failure: null });
+
+    const reopened: LineSpec[] = [...passed, [5, 1, '8.1', 'implement', 'start', 1]];
+    expect(view(reopened)).toMatchObject({
+      state: 're-implementing',
+      failure: { note: { kind: 'notes', gate: 'wave_test', summary: 'blank screen for 7 s' }, statusText: 'Fixing these notes' },
+    });
+    const fixed: LineSpec[] = [...reopened, [8, 1, '8.1', 'implement', 'pass', 2]];
+    expect(view(fixed)).toMatchObject({ state: 're-verifying', failure: { statusText: 'Verifying the fixes' } });
+    // Once its re-verify and wave retest pass, the notes it fixed leave the card (Run notes keeps them).
+    const done: LineSpec[] = [...fixed, [9, 1, '8.1', 'verify', 'pass', 2], [10, 1, '8.1', 'wave_test', 'pass', 2]];
+    expect(view(done)).toMatchObject({ state: 'doc-syncing', failure: null });
+  });
+
+  it('shows no notes on a sprint whose pass with notes was not followed by a retry', () => {
+    const ui: SprintSpec = ['8.1', '--', '- ui: /'];
+    const lines: LineSpec[] = [head[0]!, [2, 1, '8.1', 'verify', 'partial', 1]];
+    expect(card(rail(makeProject([{ n: 8, sprints: [ui], log: jsonl(lines) }]), 8), '8.1')).toMatchObject({
+      state: 'wave-testing',
+      failure: null,
+    });
+  });
+
   it('reads Needs you, not Verify failed, once verify fails at the retry limit', () => {
     const lines: LineSpec[] = [head[0]!, [2, 1, '8.1', 'verify', 'fail', 3]];
     const v = rail(makeProject([{ n: 8, sprints: [['8.1', '--']], log: jsonl(lines) }]), 8);

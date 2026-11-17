@@ -11,7 +11,9 @@
  *   Colour is an edge, not a border: a 2px left edge in the running, failed,
  *   needs-you or manual colour; Waiting is idle, so it has no edge and a grey badge.
  *   While the sprint is implemented the bar fills in the running colour, a
- *   task at a time, from the implementer's `task` lines. A row that turns
+ *   task at a time, from the implementer's `task` lines. Green is kept for
+ *   Complete: while the card is in a gate or failed state, done tasks are
+ *   drawn in the running colour too (a sprint reworked after doc sync). A row that turns
  *   Complete while on screen keeps its all-green bar for
  *   {@link COMPLETE_BAR_MS} first.
  * - Open, inside the same row: the goal, the tasks table (shared `TasksTable`, with rows following the implementer's
@@ -26,7 +28,7 @@
  *
  * Test hooks: `article[data-sprint-card]` (with `data-state`, `data-open`),
  * `card-toggle`, `card-state` (with `data-state`), `card-status-bar`,
- * `card-body`, `card-failure` (with `data-gate`, `data-attempt`),
+ * `card-body`, `card-failure` (with `data-kind`, `data-gate`, `data-attempt`),
  * `card-failure-next`, `details[data-row]` (`criteria`, `dependencies`,
  * `verification`, `run-notes`) and `run-note` (with `data-kind`, `data-gate`,
  * `data-attempt`, `data-resolved`).
@@ -39,7 +41,7 @@ import { paths } from '../shell/router.js';
 import { Inline } from '../sprint/markdown.js';
 import { CriteriaList, TasksTable } from '../sprint/parts.js';
 import { doneOfEligible, liveTaskCounts, liveTaskStates } from '../sprint/status.js';
-import { isFailedState, isGateState, type CurrentFailure, type RailSprint, type RunNote, type SprintState } from './derive.js';
+import { isActiveState, isFailedState, isGateState, type CurrentFailure, type RailSprint, type RunNote, type SprintState } from './derive.js';
 
 /** Badge class (`.status.{kind}`) per state; `not-started` is a plain tag instead. */
 function badgeKind(state: SprintState): 'run' | 'fail' | 'pass' | 'needs' | 'manual' | 'wait' {
@@ -110,6 +112,7 @@ export function SprintCard({ sprint, open, onToggle, dashed, headingLevel }: Spr
           <StatusSegments
             progress={sprint.progress}
             live={liveTaskCounts(sprint.sprint.tasks, liveTaskStates(sprint.run))}
+            reworking={isActiveState(sprint.state)}
             testId="card-status-bar"
           />
         )}
@@ -339,13 +342,19 @@ function VerificationList({ verification }: { verification: VerificationConfig }
 }
 
 /**
- * The failure being retried, under the tasks table: what failed and why (red),
- * then where the retry has got to (amber).
+ * The failure being retried, under the tasks table: what failed and why (red,
+ * or grey for a pass with notes being fixed), then where the retry has got to (amber).
  */
 function FailureRow({ failure }: { failure: CurrentFailure }) {
   const { note } = failure;
   return (
-    <div className="card-failure" data-testid="card-failure" data-gate={note.gate} data-attempt={note.attempt}>
+    <div
+      className={note.kind === 'notes' ? 'card-failure notes' : 'card-failure'}
+      data-testid="card-failure"
+      data-kind={note.kind}
+      data-gate={note.gate}
+      data-attempt={note.attempt}
+    >
       <p className="card-failure-why">
         <b>
           {note.title}

@@ -401,6 +401,14 @@
 .card-failure-why .when {
   color: var(--text-3);
 }
+/* A pass with notes being fixed: grey, as in Run notes, not a failure. */
+.card-failure.notes .card-failure-why {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+}
+.card-failure.notes .card-failure-why b {
+  color: var(--text);
+}
 .card-failure-next {
   font: 12px var(--mono);
   color: var(--accent-text);

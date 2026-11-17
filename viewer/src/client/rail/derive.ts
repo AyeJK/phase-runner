@@ -65,7 +65,8 @@
  * gate passed), each full test suite attempt that failed on the sprint, and
  * each `partial` or `warn` result as "passed with notes".
  * While a failure is being retried, the open card also shows it under the
- * tasks table (see {@link currentFailure}).
+ * tasks table (see {@link currentFailure}); so does a pass with notes when
+ * the sprint is reopened to fix them.
  *
  * **Phase groups** for phase states and the phase list: `complete` (every eligible task done,
  * and no sprint card in a gate state or Needs you), `future` (no task done,
@@ -223,10 +224,11 @@ export interface RailSprint {
   failure: CurrentFailure | null;
 }
 
-/** The failed attempt a sprint is retrying, with where the retry has got to. */
+/** The failed attempt (or pass with notes) a sprint is retrying, with where the retry has got to. */
 export interface CurrentFailure {
+  /** A `failed` note, or a `notes` one when the sprint was reopened after a pass with notes. */
   note: RunNote;
-  /** "Retry next · 2 attempts left", "Retrying with the failure attached", "Verifying the retry". */
+  /** "Retry next · 2 attempts left", "Retrying with the failure attached", "Verifying the retry", "Fixing these notes". */
   statusText: string;
 }
 
@@ -748,14 +750,39 @@ const RETRY_STATUS: Partial<Record<SprintState, string>> = {
   're-wave-testing': 'Wave testing the retry',
 };
 
+/** Where a rework after a pass with notes has got to, under the notes it's fixing. */
+const NOTES_STATUS: Partial<Record<SprintState, string>> = {
+  're-implementing': 'Fixing these notes',
+  're-verifying': 'Verifying the fixes',
+  're-wave-testing': 'Wave testing the fixes',
+};
+
 /**
- * The failure a sprint is retrying: the latest failed verify or wave test in
- * its current wave that no later run of the same gate has passed, while the
- * card is in a gate or failed state. `null` otherwise (never failed, fixed,
- * or escalated, which the escalation banner shows instead).
+ * What a sprint is retrying, while the card is in a gate or failed state:
+ *
+ * - the latest failed verify or wave test in its current wave that no later
+ *   run of the same gate has passed;
+ * - else, while it reads Re-implementing, Re-verifying or Wave retesting, the
+ *   latest pass with notes (`partial` or `warn`) in its current wave that an
+ *   `implement` `start` came after: the sprint was reopened to fix them.
+ *
+ * `null` otherwise (never failed, fixed, or escalated, which the escalation
+ * banner shows instead).
  */
 export function currentFailure(state: SprintState, run: SprintRun | null, notes: readonly RunNote[]): CurrentFailure | null {
   if (!run || !isActiveState(state)) return null;
+  const failure = currentFailedNote(state, run, notes);
+  if (failure) return failure;
+  const status = NOTES_STATUS[state];
+  if (status === undefined) return null;
+  const lastStart = run.events.reduce((line, e) => (isStartMarker(e) ? Math.max(line, e.line) : line), 0);
+  const note = [...notes]
+    .reverse()
+    .find((n) => n.kind === 'notes' && n.run === run.run && n.wave === run.wave && n.line < lastStart);
+  return note ? { note, statusText: status } : null;
+}
+
+function currentFailedNote(state: SprintState, run: SprintRun, notes: readonly RunNote[]): CurrentFailure | null {
   const note = [...notes]
     .reverse()
     .find(
