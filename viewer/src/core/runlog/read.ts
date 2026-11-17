@@ -19,9 +19,10 @@
  * - `v > 1`: the file gets one warning (at the first such line) and every line
  *   is still read best-effort. `v` that isn't a number `>= 1` skips the line.
  * - Unknown `gate` / `result` values are kept as `unknown`, with the raw value
- *   in `rawGate` / `rawResult` and a warning. `result: "start"` is read without
- *   a warning on `implement` and `task` lines only; on any other gate it is
- *   `unknown`.
+ *   in `rawGate` / `rawResult`, and one warning per value per file (at its
+ *   first line), so a log from a newer writer doesn't bury the page in
+ *   warnings. `result: "start"` is read without a warning on `implement`,
+ *   `task` and `suite` lines only; on any other gate it is `unknown`.
  * - A `task` line carries its task number alone in `summary`. It is read into
  *   {@link RunEvent.task}; a `task` line whose `summary` isn't a whole number
  *   is skipped with a warning.
@@ -54,11 +55,12 @@ export const DEFAULT_MAX: Readonly<Record<RunGate, number>> = {
   wave_test: 3,
   doc_sync: 1,
   task: 3,
+  suite: 3,
   unknown: 3,
 };
 
 /** Gates whose lines may carry `result: "start"`. */
-const START_GATES: ReadonlySet<RunGate> = new Set<RunGate>(['implement', 'task']);
+const START_GATES: ReadonlySet<RunGate> = new Set<RunGate>(['implement', 'task', 'suite']);
 
 /** A `task` line's `summary`: the task number and nothing else. */
 const TASK_NUMBER = /^\d+$/;
@@ -94,7 +96,7 @@ export function readRunLog(text: string | Uint8Array, file: string): RunLogRead 
     // The last segment is either '' (the file ends with a newline) or an append
     // still in progress. Both are skipped silently.
     const terminated = segments.length - 1;
-    let versionWarned = false;
+    const claimed = new Set<string>();
 
     for (let i = 0; i < terminated; i++) {
       const lineNo = i + 1;
@@ -104,9 +106,9 @@ export function readRunLog(text: string | Uint8Array, file: string): RunLogRead 
 
       try {
         const lineWarn = (message: string): void => warn(lineNo, raw, message);
-        const event = readLine(raw, lineNo, lineWarn, () => {
-          if (versionWarned) return false;
-          versionWarned = true;
+        const event = readLine(raw, lineNo, lineWarn, (key) => {
+          if (claimed.has(key)) return false;
+          claimed.add(key);
           return true;
         });
         if (event) events.push(event);
@@ -125,14 +127,16 @@ export function readRunLog(text: string | Uint8Array, file: string): RunLogRead 
  * Parse one terminated, non-blank line. Returns `null` (after warning) when the
  * line can't become an event.
  *
- * @param claimVersionWarning Returns `true` the first time it is called per
- *   file, so the `v > 1` warning is raised once.
+ * @param once Returns `true` the first time it is called with a key per file,
+ *   so the `v > 1` warning, and the warning for each unknown gate or result
+ *   value, is raised once per file: a log from a newer writer reads as one
+ *   warning per new value, not one per line.
  */
 function readLine(
   raw: string,
   line: number,
   warn: (message: string) => void,
-  claimVersionWarning: () => boolean,
+  once: (key: string) => boolean,
 ): RunEvent | null {
   let parsed: unknown;
   try {
@@ -157,7 +161,7 @@ function readLine(
     warn(`Unsupported run-log version "v": ${show(v)}; skipped`);
     return null;
   }
-  if (v > RUN_LOG_VERSION && claimVersionWarning()) {
+  if (v > RUN_LOG_VERSION && once('version')) {
     warn(
       `Run log uses format v${v}, newer than this reader (v${RUN_LOG_VERSION}); reading it best-effort`,
     );
@@ -189,14 +193,14 @@ function readLine(
   // Enumerations: unknown values are kept as `unknown`.
   let gate: RunGate = 'unknown';
   if (KNOWN_GATES.has(rawGate)) gate = rawGate as RunGate;
-  else warn(`Unknown gate ${show(rawGate)}; kept as "unknown"`);
+  else if (once(`gate:${rawGate}`)) warn(`Unknown gate ${show(rawGate)}; kept as "unknown" (warned once per file)`);
 
   let result: RunResult = 'unknown';
   if (KNOWN_RESULTS.has(rawResult)) result = rawResult as RunResult;
-  else warn(`Unknown result ${show(rawResult)}; kept as "unknown"`);
+  else if (once(`result:${rawResult}`)) warn(`Unknown result ${show(rawResult)}; kept as "unknown" (warned once per file)`);
   if (result === 'start' && !START_GATES.has(gate)) {
     result = 'unknown';
-    warn(`Result "start" is only used on implement and task lines, not ${show(rawGate)}; kept as "unknown"`);
+    warn(`Result "start" is only used on implement, task and suite lines, not ${show(rawGate)}; kept as "unknown"`);
   }
 
   // A task line names its task in `summary`; without a number it says nothing.

@@ -230,6 +230,7 @@ describe('createCheckoutSet', () => {
       waves: [],
       escalations: [],
       sprintHistory: {},
+      suites: [],
     });
     expect(isCandidate(runs(['2026-10-22T08:28:27Z']), checkout)).toBe(true); // same second
     expect(isCandidate(runs(['2026-10-22T08:28:26Z']), checkout)).toBe(false); // the second before

@@ -53,7 +53,7 @@ This copies the same nine skills into your project, without the `phase-runner:` 
   <img src="docs/how-it-works.gif" alt="How Phase Runner works, one stage at a time, using phase-viewer's own build. Idea: product-planner writes the plan and weighs three options for who writes the run log, picking A3. Design: design-planner locks the palette, type and status badges. Plan: phase-planner lists seven phases and splits Phase 2 into sprints 2.1 to 2.5, with acceptance criteria. Build: phase-builder runs the sprints in four waves, with 2.2 and 2.3 in parallel, each on a fresh sub-agent. QA: verify fails Sprint 2.3 on two tests, retries with the failure attached, and passes. Sign off: Phase 2 ends at 27 of 28 tasks with one needing you, and you approve." width="100%">
 </p>
 
-When you run a phase, `phase-builder` groups sprints into parallel-safe waves and gives each sprint a fresh sub-agent. Every sprint carries acceptance criteria, and UI sprints build against your design system. After every wave, `phase-verify` runs your build, typecheck and tests and reviews the diff against every acceptance criterion, and `phase-wave-test` checks UI work in a browser against your design system. A failed wave retries the same sprint with the failure attached, up to three times, then escalates to you. Only `phase-doc-sync` writes status back to the phase file, so the plan always matches what actually passed. Nothing ships past you.
+When you run a phase, `phase-builder` groups sprints into parallel-safe waves and gives each sprint a fresh sub-agent. Every sprint carries acceptance criteria, and UI sprints build against your design system. After every wave, `phase-verify` runs your build, typecheck and the tests related to the wave's changes and reviews the diff against every acceptance criterion, and `phase-wave-test` checks UI work in a browser against your design system. The full test suite runs once, at the end of the phase. A failed wave retries the same sprint with the failure attached, up to three times, then escalates to you. Only `phase-doc-sync` writes status back to the phase file, so the plan always matches what actually passed. Nothing ships past you.
 
 Want two phases going at once? Say *"run phase 4 in a worktree"* in a second session. That phase builds on its own branch in a git worktree, so neither session's verify gate trips over the other's half-written code. When the phase finishes, `phase-builder` merges the branch back and asks before removing the worktree.
 
@@ -72,10 +72,12 @@ In Claude Code, say *"open the viewer"*. The `phase-viewer` skill starts it in t
 Or, from your project folder (the one that holds `docs/phases/`), in your own terminal:
 
 ```
-npx phase-viewer
+npx phase-viewer@latest
 ```
 
-Phases running in git worktrees (phase-builder's worktree mode or a desktop side session) show up in the same viewer until their branch is merged. You don't need a second viewer. Needs phase-viewer 0.6.0 or later.
+`@latest` makes npx fetch new releases instead of reusing the copy it cached the first time. A newer viewer replaces an older one still running for the project.
+
+Phases running in git worktrees (phase-builder's worktree mode or a desktop side session) show up in the same viewer until their branch is merged. You don't need a second viewer. Needs phase-viewer 0.6.0 or later. The full test suite at the end of each phase shows from 0.7.0; older viewers warn about its log lines.
 
 **Local sessions only.** The viewer serves on `localhost` of the machine that runs it. In a cloud or remote Claude Code session, the skill starts nothing and tells you to run `npx phase-viewer` on your own machine, against your local checkout.
 
@@ -166,8 +168,8 @@ You normally don't call these. `phase-builder` spawns each one as a sub-agent du
 | Skill | Job |
 |---|---|
 | `phase-ui-implement` | Builds UI sprints. Reads your `design-system.md` first, generic UI-pattern skills second. |
-| `phase-verify` | Runs your build/test/typecheck command, then reviews the wave's diff: a met/not-met verdict with evidence for every acceptance criterion, a check that no test was deleted or weakened, and a check that changes stay inside each sprint's Module column. Serious findings fail the wave and trigger a retry. |
-| `phase-wave-test` | Browser and UI checks on UI sprints, against your project's `design-system.md` if one exists. |
+| `phase-verify` | Runs your build and typecheck and the tests related to the wave's changes (the full suite once, at the end of the phase), then reviews the wave's diff: a met/not-met verdict with evidence for every acceptance criterion, a check that no test was deleted or weakened, and a check that changes stay inside each sprint's Module column. Serious findings fail the wave and trigger a retry. |
+| `phase-wave-test` | Browser and UI checks on UI sprints, at 375 and 1280px wide unless the phase plan names other widths, against your project's `design-system.md` if one exists. Each screen gets its full check in the last wave that touches it, and a quick one before that. A broken flow or layout fails the wave; design-system drift is a warning, listed for you at the end of the phase. |
 | `phase-doc-sync` | The *only* thing allowed to write status changes back into the phase file. Batches edits, never touches acceptance criteria or task text. |
 
 ## Why sub-agents, and why the strict handoff order

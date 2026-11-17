@@ -181,7 +181,8 @@ Read **`skill-router.md`** at Step 1.5 (it in turn depends on `runtime-adapter.m
 2. **Honor user-requested skills** from the run request — testing skills → wave-test; UI skills → implementation for UI sprints.
 3. **Per sprint:** set `implementation_agent: ui | general`; build `implementation_skills[]`; set `design_system_doc` to `{workspace_root}/docs/design/design-system.md` when sprint is UI or mixed **and that file exists** — check existence by absolute path, never relative. When it exists, grep its headings once (`^#{1,3} `) and set `design_sections[]` per sprint: the headings that match the components and screens its tasks name. This lets sub-agents read a few sections instead of the whole file.
 4. **Per wave:** mark `wave_has_ui: true|false`; build `verify_skills[]`; build `wave_test_skills[]` when UI; set `harness_doc` to `{app_root}/docs/testing/wave-test-harness.md` (pass it whether or not it exists yet — the first wave test creates it).
-5. **Include skill plan** in the execution plan report (Step 2.5).
+5. **Per UI route:** once Step 2.5 has built the waves, record each route's `last_wave`: the last wave whose sprints touch it (their `ui:` lines, or routes inferred from tasks). That wave tests it `full`; every earlier one `light` (see 3f). A route that a sprint later in the phase but outside this run also touches has no last wave in this run — it stays `light`.
+6. **Include skill plan** in the execution plan report (Step 2.5), with each route's `last_wave`.
 
 Sub-agents load their own assigned skill files/names themselves — orchestrator only passes the resolved references (paths or names, per runtime-adapter) in prompts, never runs those workflows inline.
 
@@ -210,7 +211,7 @@ Every step an agent takes re-reads everything it has seen so far. An agent kept 
 | Same sprint's implementation, retry within the **same wave** | ✓ Preferred when the agent is still addressable: it already has the code in context and the fix is usually small. Otherwise re-spawn with the full 3a prompt. Either way the retry carries its new run-log `attempt` |
 | Verify re-run within the **same wave**, after a retry | ✓ |
 | Wave-test retry | ✗ Spawn fresh at `tier: regression` with `retest_only` — cheaper than continuing a tester whose context is full of the first attempt's browser logs |
-| Any gate agent (verify, wave-test, doc-sync) into a **new wave** | ✗ Never. Spawn fresh |
+| Any gate agent (verify, wave-test, doc-sync) into a **new wave**, or into the phase suite gate (3g) | ✗ Never. Spawn fresh. A suite re-run after a retry (3g) may continue the suite agent |
 | An agent past its 3rd continuation | ✗ Spawn fresh; pass a short summary of what's already done |
 
 Pass a gate agent only what it needs: the payload, the harness doc path, the design sections. Never paste earlier waves' results into it.
@@ -225,13 +226,14 @@ Track retry counts **per wave** (reset when a new wave starts, or when the user 
 |------|-------------|------------|
 | **3b-verify-retry** | **3** | Each `VERIFY RESULT: FAIL` after re-implement + re-verify cycle |
 | **3f-retry** | **3** | Each `WAVE TEST RESULT: FAIL` after full retry cycle |
+| **3g-suite-retry** | **3** (`max_verify_retries`) | Each suite-mode `VERIFY RESULT: FAIL` after re-implement + re-run. Counted once per phase, not per wave |
 
 User may override at run start: e.g. `max retries 5` or `strict — no retry limit` (honor explicit instruction).
 
 **When a counter reaches max**, stop the retry loop and surface:
 
 ```
-⚠ {Verify | Wave test} retry limit reached ({max}/{max}) — Sprint(s) {ids}
+⚠ {Verify | Wave test | Suite} retry limit reached ({max}/{max}) — Sprint(s) {ids}
 
 Last failures:
 {FAILURES / ISSUES from most recent result block}
@@ -278,6 +280,8 @@ Log each retry: `↻ Verify — 5.3 (retry 2/3)` or `↻ Wave test — 5.3 (retr
 
 **UI:** 3b → 3b-verify → (retry loop) → 3c → 3f → (retry loop) → 3d → 3c-sync ∥ next wave's 3b
 
+**Phase end (once):** last wave's 3c-sync → 3g → (retry loop) → Step 4
+
 Each arrow = wait for the prior step's result block before spawning the next sub-agent. `∥` = same turn.
 
 ### Advance rule
@@ -291,7 +295,7 @@ Spawn it in the same turn as **3c-sync**. Then:
 
 - **Wait for `DOC SYNC RESULT` before the next wave's verify.** That keeps the run log in order (wave N's `doc_sync` lines before wave N+1's `implement` `pass` / `blocked` lines; only its `start` and `task` lines may come earlier) and makes sure a failed sync stops the run before more work is verified.
 - **Doc-sync PARTIAL / FAILED:** let the in-flight implementation calls finish, don't spawn their verify, and show FAILURES (see 3c-sync). The fix is to the phase file only, so the next wave's `diff_base` stays valid.
-- **Last wave of the phase:** doc-sync runs alone; wait for it before the Step 4 checkpoint.
+- **Last wave of the phase:** doc-sync runs alone; wait for it before the phase suite gate (3g), then the Step 4 checkpoint.
 
 ---
 
@@ -410,7 +414,7 @@ Each verify, wave-test and doc-sync call carries a `run_log` block, and that gat
 | Field | Value |
 |-------|-------|
 | `path` | Absolute path of the log under **workspace_root** (not app_root), with forward slashes |
-| `phase`, `wave` | Phase number; this wave's number from the execution plan |
+| `phase`, `wave` | Phase number; this wave's number from the execution plan (the suite gate and its retries: the last wave's number + 1) |
 | `attempt` | Verify: `verify_retry_count + 1`. Wave-test: `wave_test_retry_count + 1`. Doc-sync: 1 (n on a user-requested re-run) |
 | `max` | Verify: `max_verify_retries`. Wave-test: `max_wave_test_retries`. Doc-sync: 1. `0` when the user set no limit |
 | `sprint_results` | Verify only: for each sprint implemented since the previous verify in this wave, `sprint`, `completed`, `blocked` and the first line of `notes`, from its `SPRINT RESULT` |
@@ -422,6 +426,8 @@ The implementer's block has `path`, `phase`, `wave`, `sprint` (its own sprint id
 |-------|-------|
 | `attempt` | `verify_retry_count + 1` at the moment you spawn or continue it: 1 on the wave's first implementation, the new count + 1 on a retry after a verify FAIL. A retry after a wave-test FAIL doesn't bump the verify counter, so it repeats the current number, the same one its verify will log |
 | `max` | `max_verify_retries`, `0` when the user set no limit |
+
+The phase suite gate (3g) logs under its own wave number, the last wave's number + 1, so a sprint re-implemented for it never lands in the last wave. Its verify call and its retry implementers carry that number as `wave`, and the suite's attempt and max (see 3g).
 
 Every implementation run gets one, including a retry continued in the same agent: that retry message carries the new `attempt` (see Retry implementation only), so the agent appends a fresh `start` line and puts the new `attempt` on the `task` lines of the tasks it works on again.
 
@@ -696,11 +702,11 @@ After **3c** (verify passed) and **before doc-sync**, if **`wave_has_ui`**:
 Spawn **exactly one** wave-test call:
 
 - **description:** `Wave test — {sprint ids}` e.g. `Wave test — 5.2, 5.3`
-- **prompt:** load the `phase-wave-test` skill per runtime-adapter.md; JSON with `project_root` = **app_root**, `workspace_root`, `design_system_doc` = `{workspace_root}/docs/design/design-system.md` (if it exists), `design_sections` (union of the wave's sprints), `harness_doc`, `tier`, `wave_sprints`, `skills_to_follow`, `test_urls`, `acceptance_notes`, `e2e_specs`, `screenshot_dir`, `run_log` (see Run log)
+- **prompt:** load the `phase-wave-test` skill per runtime-adapter.md; JSON with `project_root` = **app_root**, `workspace_root`, `design_system_doc` = `{workspace_root}/docs/design/design-system.md` (if it exists), `design_sections` (union of the wave's sprints), `harness_doc`, `wave_sprints`, `skills_to_follow`, `test_urls` (each with its `tier`), `viewports` (union of the wave's sprints' `viewports:` lines; omit when none, and wave-test uses `[375, 1280]`), `acceptance_notes`, `e2e_specs`, `screenshot_dir`, `run_log` (see Run log)
 - **`skills_to_follow`:** each skill as the skill-router resolved it — an absolute `SKILL.md` path when you know it, otherwise the exact name to load with the skill tool. Never a bare name the tester would have to search the disk for
 - **`e2e_specs`:** the `E2E_SPECS` list from the last passing `VERIFY RESULT` (spec files in this wave's diff that verify ran and saw pass). The tester skips browser checks those specs already assert
 - **`screenshot_dir`:** `{workspace_root}/docs/phases/.runs/screenshots/phase-{N}/wave-{W}/`, absolute, forward slashes. Run noise, like the run log
-- **tier:** `full` on the wave's first test; `regression` with `retest_only` = the previous `FAILURES` on every retry; `light` when the wave's UI change has no new visual surface, or when it only scaffolds a screen that a later sprint builds out
+- **tier (per `test_urls` entry):** `full` only when this is the route's `last_wave` (Step 1.5) — each screen gets one full test per phase, once it's finished; `light` in every earlier wave that touches it. On every retry, every entry is `regression`, with `retest_only` = the previous `FAILURES`
 - **model:** `gate_model` if resolved; a **fresh** agent every time — first test and every retry (see Sub-agent lifecycle)
 
 Wait for `WAVE TEST RESULT:` **before 3c-sync** — never batch with verify or doc-sync in the same turn.
@@ -708,7 +714,7 @@ Wait for `WAVE TEST RESULT:` **before 3c-sync** — never batch with verify or d
 | WAVE TEST STATUS | Orchestrator action |
 |------------------|---------------------|
 | PASS | `✓ Wave test — {ids} (PASS)` → 3d → **3c-sync** ∥ next wave |
-| WARN | Log warnings → 3d → **3c-sync** ∥ next wave (unless strict mode → treat as FAIL) |
+| WARN | `✓ Wave test — {ids} (WARN, {k} design issues)`. Keep its `DESIGN_ISSUES` and `ISSUES` for the Step 4 checkpoint → 3d → **3c-sync** ∥ next wave. Never retry on WARN (strict mode → treat as FAIL) |
 | FAIL | **3f-retry** — do not doc-sync or advance wave |
 
 **Skip 3f** when `wave_has_ui: false` (data-only wave) — go straight to **3c-sync** after verify.
@@ -722,7 +728,7 @@ On `WAVE TEST RESULT: STATUS: FAIL`:
 3. Parse `AFFECTED_SPRINTS`, `FAILURES`, `ISSUES`, `DESIGN_ISSUES`
 4. Re-spawn **same sprint** implementation (3a-ui / 3a-general, `(retry {n})`, failures injected), run-log `attempt` = `verify_retry_count + 1`, unchanged. **No fix-only sub-agents.**
 5. Wait for `SPRINT RESULT:` → **3b-verify** (wait for `PASS`, or `PARTIAL` outside strict mode)
-6. Re-spawn **3f** only, fresh, at `tier: regression` with `retest_only` — **do not doc-sync** until wave-test PASS/WARN
+6. Re-spawn **3f** only, fresh, with every `test_urls` entry at `tier: regression` and `retest_only` — **do not doc-sync** until wave-test PASS/WARN
 7. Repeat until `PASS`/`WARN`, user says stop/skip, or escalation
 
 Orchestrator logs: `↻ Wave test — 5.3 (retry {n}/{max})`.
@@ -782,11 +788,36 @@ If no blockers, log completion and move to the **next sprint or next wave**:
 
 For a multi-sprint wave, log verify → wave-test (if UI) → doc-sync → one line per sprint. **Start the next wave's implementation in the same turn as this wave's doc-sync**, and hold its verify until `DOC SYNC RESULT: SUCCESS` (see Advance rule).
 
+### 3g. Phase suite gate (once, after the last wave)
+
+Per-wave verify runs only the tests related to each wave's changes. The full suite runs once, here: after the last wave's `DOC SYNC RESULT: SUCCESS`, before the Step 4 checkpoint. Skip it when no sprint was implemented this run.
+
+Spawn **exactly one** verify call:
+
+- **description:** `Verify suite — phase {N}`
+- **prompt:** load the `phase-verify` skill per runtime-adapter.md; JSON payload with `mode: "suite"`, `project_root` = **app_root**, `workspace_root`, `wave_sprints` = every sprint implemented this run (`id`, `title`, `verification_cli`, `tasks` with Module cells — no `acceptance`), `skills_to_follow`, `default_command`, `diff_base` = the first wave's `diff_base` this run (`null` on a resumed run), `run_log` (see Run log: `wave` = the suite's number, the last wave's number + 1; `attempt` = `suite_retry_count + 1`; `max` = `max_verify_retries`; `sprint_results` = the sprints a retry just re-implemented, absent on the first run), and in worktree mode `leak_check`
+- **model:** `gate_model` if resolved; fresh (see Sub-agent lifecycle)
+
+| VERIFY STATUS | Orchestrator action |
+|---------------|---------------------|
+| PASS | `✓ Suite — phase {N} ({tests})` → Step 4 |
+| FAIL, `AFFECTED_SPRINTS` lists sprints | **3g-suite-retry** |
+| FAIL, `AFFECTED_SPRINTS: NONE` | No sprint owns the failure — it may predate the phase. Don't retry; escalate (see Retry limits) with the failures |
+
+**3g-suite-retry:**
+
+1. Increment `suite_retry_count` (starts at 0 for the phase). At `max_verify_retries` → escalate.
+2. Re-spawn each affected sprint's implementation — 3a-ui / 3a-general, `(retry {n})`, `PRIOR VERIFY / WAVE TEST FAILURES` = the suite `FAILURES`, and a `RUN LOG` section with `wave` = the suite's number and `attempt` = the new `suite_retry_count + 1`. Sprints that shared a wave may go in one turn; otherwise one at a time, in wave order.
+3. A retry that reports `BLOCKED` stops the run as in 3d.
+4. Wait for every `SPRINT RESULT:` → re-spawn the suite verify only. Repeat until PASS, the user says stop/skip, or escalation.
+
+No doc-sync: the sprints are already done in the phase file. A retried UI sprint isn't wave-tested again — list it under "Needs a human check" at the checkpoint. Logs: `↻ Suite — 5.3 (retry {n}/{max})`.
+
 ---
 
 ## Step 4 — Phase Boundary Checkpoint
 
-After all sprints in the current phase are done (or you've reached the end of what was requested), **always pause** — never auto-advance to the next phase.
+After all sprints in the current phase are done (or you've reached the end of what was requested) and the phase suite gate (3g) has passed or been skipped by the user, **always pause** — never auto-advance to the next phase.
 
 **Before generating the checkpoint message:**
 - Re-read the completed phase file to get accurate sprint titles and task counts. Do not rely on memory — invent nothing. Every task still `MANUAL` in it goes on the manual list, including ones planned that way in sprints that ran.
@@ -809,6 +840,10 @@ Manual — yours to do (mark each x in the phase file when done):
 Needs a human check:
   ? {sprint id} — "{criterion}" — {what would decide it}
   ↗ {sprint id} — touched {file} outside its Module column
+  ? {sprint id} — retried for the phase suite gate; not wave-tested since
+{if any wave test returned WARN}
+Design drift — your call (fix now, add a sprint, or accept):
+  ~ {sprint id} — {route} — {issue from DESIGN_ISSUES / ISSUES}
 
 ---
 
@@ -859,6 +894,8 @@ Migrations merged from a worktree are already applied to the shared local databa
 | Verify retry limit reached | Escalate with failure summary; wait for user (continue / skip gate / stop) |
 | Wave test returns FAIL | 3f-retry loop — re-implement, re-verify, re-test; no doc-sync until wave-test pass |
 | Wave test retry limit reached | Escalate with failure summary; wait for user |
+| Wave test returns WARN | Never retry; keep the issues for the Step 4 checkpoint (strict mode: treat as FAIL) |
+| Phase suite gate (3g) returns FAIL | 3g-suite-retry for `AFFECTED_SPRINTS`; escalate at max, or at once when `AFFECTED_SPRINTS: NONE` |
 | Doc-sync returns FAILED / PARTIAL | Do not advance wave; show FAILURES; retry doc-sync or fix phase file manually |
 | Orchestrator tempted to edit phase file directly | Don't — spawn doc-sync instead |
 | Orchestrator tempted to run a CLI check directly | Don't — spawn phase-verify instead |
@@ -919,9 +956,12 @@ User: "Implement phase 5 with responsive-testing"
 [Turn 4]
 [Sub-agent: Verify — 5.2, 5.3 → PASS]
 [Turn 5]
-[Sub-agent: Wave test — 5.2, 5.3 → PASS]
+[Sub-agent: Wave test — 5.2, 5.3 → WARN (1 design issue, kept for the checkpoint)]
 [Turn 6 — last wave: doc-sync alone]
 [Sub-agent: Doc sync — 5.2, 5.3 → SUCCESS]
+[Turn 7 — phase suite gate]
+[Sub-agent: Verify suite — phase 5 → PASS]
+[Step 4 checkpoint — lists the design issue for the user]
 
 [On verify FAIL — no Fix task]
 [Turn N]   [Sub-agent: Sprint 5.3 — UI frequency (retry 1) → SPRINT RESULT]

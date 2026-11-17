@@ -24,6 +24,7 @@ function withoutTasks(d: RunDerivation): RunDerivation {
     waves: d.waves.map((w) => ({ ...w, sprints: w.sprints.map(strip) })),
     escalations: d.escalations,
     sprintHistory: Object.fromEntries(Object.entries(d.sprintHistory).map(([id, runs]) => [id, runs.map(strip)])),
+    suites: d.suites,
   };
 }
 
@@ -187,7 +188,7 @@ describe('deriveRun: task lines at the edges', () => {
   it('never open a wave or a sprint run on their own', () => {
     // A task line with nothing else of its wave logged (the start line's append failed).
     const only = asTasks(events([1, '5.1', 'task', 'start', 1]), { 0: 1 });
-    expect(deriveRun(only)).toEqual({ waves: [], escalations: [], sprintHistory: {} });
+    expect(deriveRun(only)).toEqual({ waves: [], escalations: [], sprintHistory: {}, suites: [] });
 
     // Wave 2's task line after wave 1 finished: wave 2 still has no events, so it is left out.
     const next = asTasks(

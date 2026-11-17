@@ -17,7 +17,10 @@
  * 4. One viewer per project (`server/instance.ts`): when the root is settled
  *    and a live viewer for it is recorded in its instance file, print that
  *    viewer's URL and exit 0 without starting anything. A stale instance
- *    file is deleted and replaced.
+ *    file is deleted and replaced. A live viewer of an older version
+ *    ({@link isOlderVersion}) is stopped and replaced instead of reused, so
+ *    `npx phase-viewer@latest` never hands back an old viewer that can't read
+ *    newer run-log events; if it can't be stopped, it is reused.
  * 5. Start the server on the first free port from `--port` (default
  *    {@link DEFAULT_PORT}) upward, bound to {@link HOST} only, write the
  *    instance file, and print the URL of the port actually bound plus the
@@ -40,7 +43,9 @@ import { startViewerServer } from './server/http.js';
 import {
   defaultInstanceDir,
   findRunningInstance,
+  isProcessAlive,
   releaseOnExit,
+  removeInstance,
   STOP_SIGNALS,
   writeInstance,
   type InstanceHandle,
@@ -262,6 +267,8 @@ export interface CliIo {
   instanceDir?: string;
   /** Options for the git-folder walk in {@link toMainCheckout} (tests pass a `ceiling`). */
   worktrees?: WorktreeOptions;
+  /** Stops an older running viewer; resolves `true` once it is gone. Defaults to {@link stopProcess}. */
+  stopInstance?: (info: InstanceInfo) => Promise<boolean>;
 }
 
 /**
@@ -278,6 +285,45 @@ export interface CliResult {
   instance?: InstanceHandle;
   /** The already-running instance whose URL was printed instead of starting a server. */
   reused?: InstanceInfo;
+  /** An older running viewer for the root that this run stopped before starting its own server. */
+  replaced?: InstanceInfo;
+}
+
+/**
+ * `true` when version `a` is older than `b`, comparing `major.minor.patch`
+ * numerically (any pre-release suffix ignored). Anything that doesn't parse
+ * (`unknown`) is never older, so an unreadable version is reused, not stopped.
+ */
+export function isOlderVersion(a: string, b: string): boolean {
+  const parse = (v: string): number[] | null => {
+    const m = /^(\d+)\.(\d+)\.(\d+)/.exec(v.trim());
+    return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+  };
+  const x = parse(a);
+  const y = parse(b);
+  if (!x || !y) return false;
+  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i]! < y[i]!;
+  return false;
+}
+
+/**
+ * Stop another viewer process: SIGTERM (its own handlers close the server and
+ * remove its instance file; on Windows it ends the process outright), then
+ * wait up to `timeoutMs` for it to exit. Resolves `false` when it can't be
+ * signalled or is still alive.
+ */
+export async function stopProcess(info: InstanceInfo, timeoutMs = 5_000): Promise<boolean> {
+  try {
+    process.kill(info.pid, 'SIGTERM');
+  } catch {
+    return !isProcessAlive(info.pid);
+  }
+  const until = Date.now() + timeoutMs;
+  while (Date.now() < until) {
+    if (!isProcessAlive(info.pid)) return true;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return !isProcessAlive(info.pid);
 }
 
 /** The one stdout line `--json` prints. */
@@ -316,9 +362,20 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<CliRes
   const root = workspace.kind === 'found' ? workspace.root : null;
   const instanceDir = io.instanceDir ?? defaultInstanceDir();
 
-  // One viewer per project: a live server for this root is reused, whatever --port says.
+  // One viewer per project: a live server for this root is reused, whatever --port says,
+  // unless it is an older version, which this one replaces.
+  let replaced: InstanceInfo | undefined;
   if (root !== null) {
-    const running = await findRunningInstance(root, instanceDir);
+    let running = await findRunningInstance(root, instanceDir);
+    if (running !== null && isOlderVersion(running.version, readVersion())) {
+      const old = running;
+      if (await (io.stopInstance ?? stopProcess)(old)) {
+        removeInstance(root, instanceDir);
+        io.stderr(`phase-viewer: stopped the older viewer for this project (v${old.version}, pid ${old.pid})`);
+        replaced = old;
+        running = null;
+      }
+    }
     if (running !== null) {
       io.stdout(
         options.json
@@ -355,7 +412,10 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<CliRes
   }
 
   io.stdout(options.json ? formatStartupJson(server.port, false, root) : formatStartup(server.port, workspace, io.cwd));
-  return instance ? { exitCode: 0, server, workspace, instance } : { exitCode: 0, server, workspace };
+  const result: CliResult = { exitCode: 0, server, workspace };
+  if (instance) result.instance = instance;
+  if (replaced) result.replaced = replaced;
+  return result;
 }
 
 /** The `--json` line: `{"url","reused","root"}`, no newlines inside. */

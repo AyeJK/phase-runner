@@ -63,8 +63,12 @@ export type TaskStatus = (typeof TASK_STATUSES)[number];
  * starts and as it finishes each task. Those lines are markers, kept out of
  * every wave's and sprint's events and steps; what they say is in
  * {@link SprintRun.tasks} (see `derive/run.ts`).
+ *
+ * `suite` is the phase-end full test suite (phase-builder 3g), run once after
+ * the last wave. Its lines are markers too, kept out of every wave; what they
+ * say is in {@link PhaseRuns.suites}.
  */
-export const RUN_GATES = ['implement', 'verify', 'wave_test', 'doc_sync', 'task', 'unknown'] as const;
+export const RUN_GATES = ['implement', 'verify', 'wave_test', 'doc_sync', 'task', 'suite', 'unknown'] as const;
 
 /** Which gate wrote a {@link RunEvent}. See {@link RUN_GATES}. */
 export type RunGate = (typeof RUN_GATES)[number];
@@ -72,13 +76,14 @@ export type RunGate = (typeof RUN_GATES)[number];
 /**
  * Run-log results from event format v1, plus `unknown` for any other value.
  *
- * `start` is only valid on `implement` and `task`. On `implement`,
+ * `start` is only valid on `implement`, `task` and `suite`. On `implement`,
  * phase-builder logs it when a sprint's implementation begins (logs written
  * before it existed have none, and read exactly as before). It is a marker,
  * not an outcome: it is never a {@link GateStep}, never counts as an attempt,
  * and never cuts a wave (see `derive/run.ts`). On `task`, the implementer logs
- * it as it begins a task, and `pass` as it finishes it. `start` on any other
- * gate is read as `unknown`, with a warning.
+ * it as it begins a task, and `pass` as it finishes it. On `suite`, phase-verify
+ * logs it as the full test suite begins. `start` on any other gate is read as
+ * `unknown`, with a warning.
  */
 export const RUN_RESULTS = ['pass', 'partial', 'warn', 'fail', 'blocked', 'start', 'unknown'] as const;
 
@@ -552,6 +557,68 @@ export interface WaveRun {
   escalated: boolean;
 }
 
+/** One run of the phase-end full test suite, as listed in {@link SuiteRun.history}. */
+export interface SuiteAttempt {
+  /** `attempt` as logged. */
+  attempt: number;
+  /** Retry limit as logged (or the reader's default); `0` means no limit. */
+  max: number;
+  /** `running` while only its `start` lines are logged; `fail` when any result line failed; else `pass`. */
+  result: 'running' | 'pass' | 'fail';
+  /** Each sprint whose result line is `fail`, with that line's summary, in first-seen order. Empty unless `result` is `fail`. */
+  failures: Array<{ sprint: string; summary: string }>;
+  /** Sprints re-implemented after the previous attempt failed (their `implement` lines sit between the two), in first-seen order. */
+  retried: string[];
+  /** The first failing line's summary on `fail`; else the first result's summary (the test count). Empty while running. */
+  summary: string;
+  /** `ts` of its first line. */
+  startedAt: string;
+  /** `ts` of its last line. */
+  updatedAt: string;
+  /** 1-based line of its first line in the `.jsonl` file. */
+  line: number;
+  /** 1-based line of its last line. */
+  lastLine: number;
+}
+
+/** A sprint being re-implemented after the full test suite failed on it. */
+export interface SuiteRetry {
+  sprint: string;
+  /** `implementing` after its `implement` `start` line; `implemented` once phase-verify logged its `implement` result. */
+  state: 'implementing' | 'implemented';
+  /** `attempt` as logged: the suite attempt that will check the fix. */
+  attempt: number;
+}
+
+/**
+ * The phase-end full test suite for one run of the phase: every time it ran,
+ * and where it stands now (the latest attempt). Derived from the run's `suite`
+ * lines. A run that never reached the suite has none.
+ */
+export interface SuiteRun {
+  /** Phase number. */
+  phase: number;
+  /** 1-based run index (see {@link WaveRun.run}). */
+  run: number;
+  /** The latest attempt: where the suite stands. */
+  latest: SuiteAttempt;
+  /** Every attempt, in line order. The last one is {@link SuiteRun.latest}. */
+  history: SuiteAttempt[];
+  /**
+   * Sprints being re-implemented since the latest attempt's results (from
+   * their `implement` lines on the suite's wave number), one entry each, in
+   * first-seen order. Empty while an attempt is running and when none is.
+   */
+  retrying: SuiteRetry[];
+  /** Implementation runs for the suite's retries, counted like a wave's retries. */
+  retries: number;
+  /**
+   * The latest attempt failed at `attempt >= max` (with `max > 0`) and nothing
+   * is logged after it: the run stopped for the user.
+   */
+  escalated: boolean;
+}
+
 /** All run-log data for one phase. */
 export interface PhaseRuns {
   /** Phase number. */
@@ -566,6 +633,8 @@ export interface PhaseRuns {
   escalations: Escalation[];
   /** Per sprint id, every {@link SprintRun} for that sprint across runs and waves, oldest first. */
   sprintHistory: Record<string, SprintRun[]>;
+  /** The phase-end full test suite, one entry per run that reached it, in log order. */
+  suites: SuiteRun[];
   /**
    * The linked git worktree this run log was read from, when the viewer shows
    * it from one. Absent for the main checkout's log, and always absent from

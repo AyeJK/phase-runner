@@ -51,6 +51,7 @@ export const GATE_NAMES: Record<RunGate, string> = {
   wave_test: 'Wave test',
   doc_sync: 'Doc sync',
   task: 'Task',
+  suite: 'Full test suite',
   unknown: 'Gate',
 };
 
@@ -61,5 +62,6 @@ export const GATE_CHIPS: Record<RunGate, string> = {
   wave_test: 'Wave test',
   doc_sync: 'Sync',
   task: 'Task',
+  suite: 'Suite',
   unknown: 'Gate',
 };

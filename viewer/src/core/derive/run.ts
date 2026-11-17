@@ -33,6 +33,21 @@
  *   {@link SprintRun.tasks}: per sprint and wave, the latest `task` line per
  *   task number (`start` is running, `pass` is built; any other result is
  *   ignored). A log without them derives exactly as before.
+ * - `suite` lines (the phase-end full test suite) are markers kept out the
+ *   same way: in no wave, never a step, attempt or cut. Each belongs to the
+ *   run a start marker with its wave number would. The suite logs under its
+ *   own wave number (the last wave's + 1), so once a run has a `suite` line,
+ *   its later `implement` and `task` lines with that number are the suite's
+ *   retries and stay out of the waves too. Per run they become one
+ *   {@link SuiteRun}: an attempt is a set of `start` lines and the result
+ *   lines after them; a result line for a sprint the attempt already has a
+ *   result for opens the next attempt (logs written without `start` lines).
+ *   The latest attempt is `running` with only `start` lines, `fail` when any
+ *   result failed, else `pass`. It escalates at `attempt >= max` (`max > 0`)
+ *   when no line at all comes after it. `implement` lines after a failed
+ *   attempt say which sprints are being re-implemented
+ *   ({@link SuiteRun.retrying}); those before an attempt, which sprints it
+ *   re-checks ({@link SuiteAttempt.retried}).
  *
  * Sprint state: see {@link SprintRunState} for the table. A wave "runs a wave
  * test" when any of its sprints is in {@link DeriveRunOptions.uiSprints}, or
@@ -51,6 +66,9 @@ import type {
   RunGate,
   SprintRun,
   SprintRunState,
+  SuiteAttempt,
+  SuiteRetry,
+  SuiteRun,
   TaskProgress,
   WaveRun,
 } from '../model.js';
@@ -75,7 +93,7 @@ export interface DeriveRunOptions {
 }
 
 /** What {@link deriveRun} returns: the derived parts of {@link PhaseRuns}. */
-export type RunDerivation = Pick<PhaseRuns, 'waves' | 'escalations' | 'sprintHistory'>;
+export type RunDerivation = Pick<PhaseRuns, 'waves' | 'escalations' | 'sprintHistory' | 'suites'>;
 
 /** Gates whose failure at the retry limit escalates. */
 const ESCALATING_GATES: ReadonlySet<RunGate> = new Set<RunGate>(['verify', 'wave_test']);
@@ -99,7 +117,19 @@ export function deriveRun(events: readonly RunEvent[], options: DeriveRunOptions
   const groups: WaveGroup[] = [];
   const starts: RunEvent[] = [];
   const taskLines: RunEvent[] = [];
+  const suiteLines: RunEvent[] = [];
+  // The current run's suite wave number, once a suite line has been seen.
+  let suiteWave: number | null = null;
   for (const event of events) {
+    if (isSuiteLine(event)) {
+      suiteLines.push(event);
+      suiteWave ??= event.wave;
+      continue;
+    }
+    if (suiteWave !== null && event.wave === suiteWave && (event.gate === 'implement' || isTaskLine(event))) {
+      suiteLines.push(event);
+      continue;
+    }
     if (isTaskLine(event)) {
       taskLines.push(event);
       continue;
@@ -109,7 +139,10 @@ export function deriveRun(events: readonly RunEvent[], options: DeriveRunOptions
       continue;
     }
     if (current === null || event.wave !== currentWave) {
-      if (current === null || event.wave < currentWave) run++;
+      if (current === null || event.wave < currentWave) {
+        run++;
+        suiteWave = null;
+      }
       currentWave = event.wave;
       current = [];
       groups.push({ run, wave: event.wave, events: current, tasks: [] });
@@ -148,7 +181,106 @@ export function deriveRun(events: readonly RunEvent[], options: DeriveRunOptions
   }
   escalations.sort((a, b) => a.line - b.line);
 
-  return { waves, escalations, sprintHistory };
+  // 4. The phase-end suite, per run.
+  const lastLogLine = events.reduce((n, e) => Math.max(n, e.line), 0);
+  const suiteByRun = new Map<number, RunEvent[]>();
+  for (const line of suiteLines) {
+    const { run: r } = waveOfMarker(line, groups);
+    let list = suiteByRun.get(r);
+    if (!list) suiteByRun.set(r, (list = []));
+    list.push(line);
+  }
+  const suites: SuiteRun[] = [];
+  for (const [r, lines] of suiteByRun) suites.push(buildSuite(r, lines, lastLogLine));
+  suites.sort((a, b) => a.latest.line - b.latest.line);
+
+  return { waves, escalations, sprintHistory, suites };
+}
+
+/** A `suite` line: the phase-end full test suite. A marker kept out of every wave. */
+export function isSuiteLine(event: Pick<RunEvent, 'gate'>): boolean {
+  return event.gate === 'suite';
+}
+
+/**
+ * One run's suite lines (in line order: `suite` lines, and the `implement` and
+ * `task` lines of its retries) as a {@link SuiteRun}. See the module comment.
+ */
+function buildSuite(run: number, all: readonly RunEvent[], lastLogLine: number): SuiteRun {
+  const lines = all.filter(isSuiteLine);
+  const implement = all.filter((e) => e.gate === 'implement');
+  const groups: RunEvent[][] = [];
+  let current: RunEvent[] | null = null;
+  for (const e of lines) {
+    const results = current?.filter((x) => x.result !== 'start') ?? [];
+    const next =
+      current === null ||
+      (e.result === 'start' && results.length > 0) ||
+      (e.result !== 'start' && results.some((x) => x.sprint === e.sprint));
+    if (next) groups.push((current = []));
+    current!.push(e);
+  }
+  const history = groups.map((g, i) => {
+    // Sprints re-implemented between the previous attempt and this one.
+    const after = i === 0 ? 0 : groups[i - 1]![groups[i - 1]!.length - 1]!.line;
+    const retried = implement.filter((e) => e.line > after && e.line < g[0]!.line).map((e) => e.sprint);
+    return suiteAttempt(g, [...new Set(retried)]);
+  });
+  const latest = history[history.length - 1]!;
+
+  // Retries after the latest attempt's results: the latest implement line per sprint.
+  const retrying = new Map<string, SuiteRetry>();
+  if (latest.result !== 'running') {
+    for (const e of implement) {
+      if (e.line <= latest.lastLine) continue;
+      retrying.set(e.sprint, { sprint: e.sprint, state: isStartMarker(e) ? 'implementing' : 'implemented', attempt: e.attempt });
+    }
+  }
+
+  // Implementation runs, counted like a wave's retries: a start opens one, a result without one counts on its own.
+  let retries = 0;
+  const open = new Set<string>();
+  for (const e of implement) {
+    if (isStartMarker(e)) {
+      retries++;
+      open.add(e.sprint);
+    } else if (!open.delete(e.sprint)) {
+      retries++;
+    }
+  }
+
+  return {
+    phase: lines[0]?.phase ?? all[0]!.phase,
+    run,
+    latest,
+    history,
+    retrying: [...retrying.values()],
+    retries,
+    escalated:
+      latest.result === 'fail' && latest.max > 0 && latest.attempt >= latest.max && latest.lastLine >= lastLogLine,
+  };
+}
+
+function suiteAttempt(lines: readonly RunEvent[], retried: string[]): SuiteAttempt {
+  const first = lines[0]!;
+  const last = lines[lines.length - 1]!;
+  const results = lines.filter((e) => e.result !== 'start');
+  const fails = results.filter((e) => e.result === 'fail');
+  const failures: Array<{ sprint: string; summary: string }> = [];
+  for (const e of fails) if (!failures.some((f) => f.sprint === e.sprint)) failures.push({ sprint: e.sprint, summary: e.summary });
+  const attempt = Math.max(...lines.map((e) => e.attempt));
+  return {
+    attempt,
+    max: last.max,
+    result: results.length === 0 ? 'running' : fails.length > 0 ? 'fail' : 'pass',
+    failures,
+    retried,
+    summary: (fails[0] ?? results[0])?.summary ?? '',
+    startedAt: first.ts,
+    updatedAt: last.ts,
+    line: first.line,
+    lastLine: last.line,
+  };
 }
 
 /** One wave's events while the log is being cut, before it becomes a {@link WaveRun}. */

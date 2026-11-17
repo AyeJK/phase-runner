@@ -1051,3 +1051,146 @@ describe('phase meta line', () => {
     });
   });
 });
+
+describe('the phase-end full test suite', () => {
+  const sprints: SprintSpec[] = [
+    ['8.1', 'xx'],
+    ['8.2', 'xx'],
+  ];
+  const waves: LineSpec[] = [
+    [0, 1, '8.1', 'implement', 'start', 1],
+    [5, 1, '8.1', 'implement', 'pass', 1],
+    [6, 1, '8.1', 'verify', 'pass', 1],
+    [7, 1, '8.1', 'doc_sync', 'pass', 1],
+    [8, 2, '8.2', 'implement', 'start', 1],
+    [12, 2, '8.2', 'implement', 'pass', 1],
+    [13, 2, '8.2', 'verify', 'pass', 1],
+    [14, 2, '8.2', 'doc_sync', 'pass', 1],
+  ];
+  // The suite logs on its own wave number: the last wave's + 1.
+  const start = (min: number, n: number): LineSpec[] => [
+    [min, 3, '8.1', 'suite', 'start', n, ''],
+    [min, 3, '8.2', 'suite', 'start', n, ''],
+  ];
+  const results = (min: number, n: number, failing: string | null): LineSpec[] => [
+    [min, 3, '8.1', 'suite', failing === '8.1' ? 'fail' : 'pass', n, failing === '8.1' ? 'parser.test.ts: 2 failing' : '40/42 passed'],
+    [min, 3, '8.2', 'suite', failing === '8.2' ? 'fail' : 'pass', n, failing === '8.2' ? 'cli.test.ts: timeout' : '40/42 passed'],
+  ];
+  const project = (lines: LineSpec[]): Project => makeProject([{ n: 8, sprints, log: jsonl(lines) }]);
+
+  it('keeps the run going while the suite runs: header, suite line, no run end, in progress', () => {
+    const p = project([...waves, ...start(15, 1)]);
+    const v = rail(p, 8, at(17));
+    expect(v.suite).toMatchObject({ state: 'running', stateText: 'Running', attemptText: null, durationText: '2 min so far', failures: [] });
+    expect(v.meta).toMatchObject({ stateText: 'Running full test suite', stateKind: 'run', complete: false });
+    expect(v.meta.timeText).toMatch(/^Started /);
+    expect(runEnd(v)).toBeNull();
+    expect(phaseGroup(p, p.phases[0]!)).toBe('progress');
+    // The wave rows are untouched: each sprint stays in its own wave.
+    expect(rows(v)).toEqual([
+      ['Wave 1', ['8.1']],
+      ['Wave 2', ['8.2']],
+    ]);
+  });
+
+  it('shows a failure on the sprint it failed on, red, with the attempt', () => {
+    const p = project([...waves, ...start(15, 1), ...results(19, 1, '8.1')]);
+    const v = rail(p, 8, at(20));
+    expect(v.suite).toMatchObject({
+      state: 'failed',
+      stateText: 'Failed',
+      attemptText: 'Attempt 1 of 3',
+      durationText: '4 min',
+      failures: [{ sprint: '8.1', summary: 'parser.test.ts: 2 failing' }],
+    });
+    expect(phaseBadge(p, p.phases[0]!)).toEqual({ kind: 'fail', text: 'Full test suite failed' });
+    expect(runEnd(v)).toBeNull();
+    expect(card(v, '8.1').runNotes).toMatchObject([
+      { kind: 'failed', gate: 'suite', title: 'Full test suite attempt 1 failed', summary: 'parser.test.ts: 2 failing', resolution: null },
+    ]);
+    expect(card(v, '8.2').runNotes).toEqual([]);
+  });
+
+  it('goes quiet once a retry passes, and finishes the run at the suite', () => {
+    const p = project([...waves, ...start(15, 1), ...results(19, 1, '8.1'), ...start(25, 2), ...results(29, 2, null)]);
+    const v = rail(p, 8, at(40));
+    expect(v.suite).toMatchObject({ state: 'passed', stateText: 'Passed', attemptText: 'Attempt 2 of 3', summary: '40/42 passed', failures: [] });
+    expect(v.meta).toMatchObject({ stateText: 'Complete', complete: true, timeText: `Finished ${formatTime(new Date(at(29)))}` });
+    expect(runEnd(v)).toEqual({ kind: 'pass', title: 'Phase run complete', attentionText: null, items: [] });
+    expect(phaseGroup(p, p.phases[0]!)).toBe('complete');
+    expect(card(v, '8.1').runNotes[0]?.resolutionText).toBe(`Full test suite attempt 2 passed at ${formatTime(new Date(at(29)))}.`);
+  });
+
+  it('needs you at the retry limit', () => {
+    const lines = [
+      ...waves,
+      ...[1, 2, 3].flatMap((n) => [...start(14 + n * 4, n), ...results(16 + n * 4, n, '8.2')]),
+    ];
+    const p = project(lines);
+    const v = rail(p, 8, at(40));
+    expect(v.suite).toMatchObject({ state: 'escalated', stateText: 'Retry limit reached', attemptText: 'Attempt 3 of 3' });
+    expect(phaseBadge(p, p.phases[0]!)).toEqual({ kind: 'needs', text: 'Needs you' });
+    expect(runEnd(v)).toEqual({
+      kind: 'needs',
+      title: 'Phase run complete',
+      attentionText: '1 escalation needs your attention',
+      items: ['Full test suite retry limit reached on sprint 8.2'],
+    });
+    expect(card(v, '8.2').runNotes).toHaveLength(3);
+  });
+
+  it('has no suite line before the run reaches it', () => {
+    expect(rail(project(waves), 8).suite).toBeNull();
+  });
+
+  it('follows the failed sprint through its retry: Suite failed, Re-implementing, Suite retesting, Complete', () => {
+    const failed = [...waves, ...start(15, 1), ...results(19, 1, '8.1')];
+    const retryStart: LineSpec = [20, 3, '8.1', 'implement', 'start', 2, ''];
+    const retryDone: LineSpec = [24, 3, '8.1', 'implement', 'pass', 2, 'done 1,2'];
+    const look = (lines: LineSpec[]) => {
+      const p = project(lines);
+      const v = rail(p, 8, at(26));
+      return { p, v, s81: card(v, '8.1'), s82: card(v, '8.2') };
+    };
+
+    const a = look(failed);
+    expect(a.s81).toMatchObject({ state: 'suite-failed', stateText: 'Suite failed' });
+    expect(a.s81.failure).toMatchObject({ note: { gate: 'suite', summary: 'parser.test.ts: 2 failing' }, statusText: 'Retry next · 2 attempts left' });
+    expect(a.s82.state).toBe('complete');
+
+    const b = look([...failed, retryStart]);
+    expect(b.s81).toMatchObject({ state: 're-implementing', stateText: 'Re-implementing' });
+    expect(b.s81.failure?.statusText).toBe('Retrying with the failure attached');
+    expect(b.v.suite).toMatchObject({ state: 'retrying', stateText: 'Retrying', failures: [{ sprint: '8.1' }] });
+    expect(phaseBadge(b.p, b.p.phases[0]!)).toEqual({ kind: 'run', text: 'Running · full test suite retry' });
+    expect(b.v.meta.retriesText).toBe('1 retry');
+    expect(runEnd(b.v)).toBeNull();
+    // The retry stays out of the waves: each sprint keeps its own wave row, and no wave reads Running.
+    expect(rows(b.v)).toEqual([
+      ['Wave 1', ['8.1']],
+      ['Wave 2', ['8.2']],
+    ]);
+    expect(b.v.rows.every((r) => r.state === 'done' && r.retries === 0)).toBe(true);
+
+    const c = look([...failed, retryStart, retryDone]);
+    expect(c.s81).toMatchObject({ state: 'suite-retesting', stateText: 'Suite retesting' });
+    expect(c.s81.failure?.statusText).toBe('Running the full test suite again');
+
+    const d = look([...failed, retryStart, retryDone, ...start(25, 2)]);
+    expect(d.s81.state).toBe('suite-retesting');
+    expect(d.s82.state).toBe('complete');
+    expect(d.v.suite).toMatchObject({ state: 'running', attemptText: 'Attempt 2 of 3' });
+
+    const e = look([...failed, retryStart, retryDone, ...start(25, 2), ...results(26, 2, null)]);
+    expect(e.s81).toMatchObject({ state: 'complete', failure: null });
+    expect(e.v.meta).toMatchObject({ stateText: 'Complete', retriesText: '1 retry' });
+  });
+
+  it('reads Needs you on the sprint the suite failed on at its retry limit', () => {
+    const lines = [...waves, ...[1, 2, 3].flatMap((n) => [...start(14 + n * 4, n), ...results(16 + n * 4, n, '8.2')])];
+    const v = rail(project(lines), 8, at(40));
+    expect(card(v, '8.2').state).toBe('needs-you');
+    expect(card(v, '8.2').failure).toBeNull();
+    expect(card(v, '8.1').state).toBe('complete');
+  });
+});

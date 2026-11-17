@@ -5,8 +5,10 @@
  *
  * Phase badge: blocked tasks ("N tasks blocked"), then an open escalation
  * ("Needs you", pink `needs`), then a started sprint with only its manual
- * tasks left ("Needs you", violet `manual`; pink wins when both apply), then every
- * eligible task done ("Complete"), then a running
+ * tasks left ("Needs you", violet `manual`; pink wins when both apply), then
+ * the latest run's phase-end full test suite (escalated: "Needs you", pink;
+ * running: "Running · full test suite"; retrying: "Running · full test suite
+ * retry"; failed: "Full test suite failed", red), then every eligible task done ("Complete"), then a running
  * sprint ("Running · wave 1 of 2", from the wave count in `live/derive.ts`),
  * else a plain tag: "Not started" (nothing done), "Waiting" (some tasks
  * done), "Deferred" / "Cut" (nothing eligible).
@@ -22,7 +24,7 @@
  */
 import type { Phase, Progress, Project, SprintRun, Task, TaskStatus } from '../../core/model.js';
 import type { IconKind } from '../components/iconKind.js';
-import { phaseRuns, projectSprintStatus } from '../data/status.js';
+import { currentSuite, phaseRuns, projectSprintStatus, suiteState } from '../data/status.js';
 import { plural } from '../format.js';
 import { liveView } from '../live/derive.js';
 
@@ -54,6 +56,14 @@ export function phaseBadge(project: Project, phase: Phase): BadgeView {
   // A sprint's own escalation (pink), then a started sprint with only its manual tasks left (violet): data/status.ts.
   if (statuses.includes('needs')) return { kind: 'needs', text: 'Needs you' };
   if (statuses.includes('manual')) return { kind: 'manual', text: 'Needs you' };
+  const suite = currentSuite(runs);
+  if (suite) {
+    const state = suiteState(suite);
+    if (state === 'escalated') return { kind: 'needs', text: 'Needs you' };
+    if (state === 'running') return { kind: 'run', text: 'Running · full test suite' };
+    if (state === 'retrying') return { kind: 'run', text: 'Running · full test suite retry' };
+    if (state === 'failed') return { kind: 'fail', text: 'Full test suite failed' };
+  }
   if (progress && progress.eligible > 0 && progress.done === progress.eligible) return { kind: 'pass', text: 'Complete' };
   if (statuses.includes('running')) {
     const view = liveView(project, phase);

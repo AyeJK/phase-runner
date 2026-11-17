@@ -183,6 +183,31 @@
   height: 12px;
 }
 
+/* The phase-end full test suite: quiet once it passes, red while it fails, pink at its retry limit. */
+.suite-state.failed {
+  color: var(--failed);
+}
+.suite-state.escalated {
+  color: var(--needs);
+}
+.suite-failures {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.suite-failures .run-note b a {
+  color: inherit;
+}
+.run-note.needs {
+  background: var(--needs-bg);
+  border-left-color: var(--needs);
+}
+.run-note.needs b {
+  color: var(--needs);
+}
+
 .sprints {
   margin: 0;
   padding: 0;

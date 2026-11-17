@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { findFreePort, HOST, runCli, type CliIo, type CliResult, type StartupJson } from '../../src/cli.js';
+import { findFreePort, HOST, isOlderVersion, runCli, type CliIo, type CliResult, type StartupJson } from '../../src/cli.js';
 import {
   defaultInstanceDir,
   findRunningInstance,
@@ -153,6 +153,49 @@ describe('reuse', () => {
     // Detection finding the same root (no --dir) reuses it too.
     const third = await cli(['--json'], root);
     expect(JSON.parse(third.out[0]!)).toEqual({ url: `http://localhost:${port}`, reused: true, root });
+  });
+
+  it('an older running viewer is stopped and replaced, not reused; one that cannot be stopped is reused', async () => {
+    const root = project('proj');
+    const first = await cli(['--dir', root, '--port', String(await deadPort())]);
+    const old = { ...first.result.instance!.info, version: '0.0.1' };
+    writeInstance(old, dir);
+
+    // Can't be stopped: reused as before.
+    const kept = await runCli(['--dir', root, '--json'], {
+      cwd: tmp, stdout: () => {}, stderr: () => {}, instanceDir: dir, worktrees: { ceiling: tmp },
+      stopInstance: async () => false,
+    });
+    expect(kept.reused).toMatchObject({ version: '0.0.1' });
+
+    const out: string[] = [];
+    const err: string[] = [];
+    const stopped: number[] = [];
+    const next = await runCli(['--dir', root, '--json'], {
+      cwd: tmp, stdout: (t) => out.push(t), stderr: (t) => err.push(t), instanceDir: dir, worktrees: { ceiling: tmp },
+      stopInstance: async (info) => {
+        stopped.push(info.port);
+        await first.result.server!.close();
+        return true;
+      },
+    });
+    running.push(next);
+    expect(stopped).toEqual([old.port]);
+    expect(next.replaced).toMatchObject({ version: '0.0.1', port: old.port });
+    expect(next.server).toBeDefined();
+    expect(JSON.parse(out[0]!)).toMatchObject({ reused: false, root });
+    expect(err).toEqual([`phase-viewer: stopped the older viewer for this project (v0.0.1, pid ${old.pid})`]);
+    expect(readInstance(root, dir)).toEqual(next.instance!.info);
+    expect(next.instance!.info.version).not.toBe('0.0.1');
+  });
+
+  it('isOlderVersion compares major.minor.patch numerically and never calls an unreadable version older', () => {
+    expect(isOlderVersion('0.6.0', '0.7.0')).toBe(true);
+    expect(isOlderVersion('0.9.0', '0.10.0')).toBe(true);
+    expect(isOlderVersion('0.7.0', '0.7.0')).toBe(false);
+    expect(isOlderVersion('1.0.0', '0.7.0')).toBe(false);
+    expect(isOlderVersion('unknown', '0.7.0')).toBe(false);
+    expect(isOlderVersion('0.6.0', 'unknown')).toBe(false);
   });
 
   it('closing the server removes its instance file, and the next start is fresh', async () => {

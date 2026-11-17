@@ -17,10 +17,11 @@ The orchestrator MUST:
 
 1. Assign skill references in the payload (`skills_to_follow`) — only ones actually available in this environment, per skill-router.md
 2. Spawn **one** wave-test call per UI wave (not per sprint), and a **fresh** one each wave — never continue a previous wave's tester
-3. Set `tier`: `full` on the first test of a wave, `regression` with `retest_only` on retries, `light` when the wave adds no new visual surface
+3. Set a `tier` on each `test_urls` entry: `full` only in the route's last wave in the phase, `light` in every earlier wave that touches it, `regression` on every entry (with `retest_only`) on retries. One wave can mix `full` and `light`
 4. Pass `harness_doc`, `design_sections`, `e2e_specs` (from the last passing `VERIFY RESULT`) and `screenshot_dir`
 5. Wait for `WAVE TEST RESULT:` before orchestrator runs doc-sync
-6. On `STATUS: FAIL` — orchestrator re-spawns implementation, re-runs verify, then re-spawns wave-test until `PASS` or retry limit (default 3, then escalate to user)
+6. On `STATUS: FAIL` — orchestrator re-spawns implementation, re-runs verify, then re-spawns wave-test until `PASS` / `WARN` or retry limit (default 3, then escalate to user)
+6b. On `STATUS: WARN` — never retry. Orchestrator keeps the issues and lists them at the phase checkpoint for the user to decide. Strict mode: WARN is treated as FAIL
 7. Log only one line: `✓ Wave test — {sprint ids} ({summary})` — no browser automation or CLI run directly in the orchestrator thread
 
 The orchestrator MUST NOT run browser automation, start dev servers, or read tool JSON descriptors during an active phase run.
@@ -43,13 +44,15 @@ The orchestrator MUST NOT run browser automation, start dev servers, or read too
   "skills_to_follow": [
     "{any browser/visual/responsive testing skill actually available in this environment, per skill-router.md}"
   ],
-  "test_urls": ["http://localhost:3000/settings/profile"],
-  "viewports": [375, 428, 768, 1280, 1536],
+  "test_urls": [
+    { "url": "http://localhost:3000/settings/profile", "tier": "full" },
+    { "url": "http://localhost:3000/settings", "tier": "light" }
+  ],
+  "viewports": [375, 1280],
   "acceptance_notes": "From sprint acceptance criteria — what to confirm in browser",
   "design_system_doc": "{workspace_root}/docs/design/design-system.md, only if it exists",
   "design_sections": ["Tabs", "Menus"],
   "harness_doc": "{app_root}/docs/testing/wave-test-harness.md",
-  "tier": "full | regression | light",
   "retest_only": ["failures from the previous attempt — regression tier only"],
   "e2e_specs": ["tests/e2e/settings.spec.ts"],
   "screenshot_dir": "/path/to/workspace-root/docs/phases/.runs/screenshots/phase-5/wave-2/",
@@ -66,12 +69,11 @@ The orchestrator MUST NOT run browser automation, start dev servers, or read too
 | `e2e_specs` | Spec files in this wave's diff that verify already ran and saw pass. Read them (they're short) before testing; see "Don't repeat verify" |
 | `screenshot_dir` | Absolute folder for every screenshot you take. Create it if missing |
 | `design_system_doc` | **`{workspace_root}/docs/design/design-system.md` only**, and only when present |
-| `test_urls` | Routes to open; infer from sprint tasks if omitted |
-| `viewports` | Default all five from a standard responsive check if omitted |
+| `test_urls` | Routes to open, each with its `tier` (`full`, `light` or `regression` — see Test tiers). A plain string is `full`. Infer from sprint tasks if omitted |
+| `viewports` | Default `[375, 1280]` if omitted. A phase plan's `viewports:` line overrides it |
 | `fix_mode` | If `true`, fix trivial issues and re-test; default `false` → report FAIL |
 | `design_sections` | Headings of `design_system_doc` that cover this wave's UI. Read only these |
 | `harness_doc` | The project's test-setup notes: how to start the app, sign in as each role, which seed data to use, what not to touch. Read first |
-| `tier` | How much to test — see below. Default `full` |
 | `retest_only` | On a `regression` retry: the failed checks to re-run |
 | `run_log` | Optional. When present, append `wave_test` events (see Run log). Absent → write nothing |
 
@@ -79,17 +81,19 @@ The orchestrator MUST NOT run browser automation, start dev servers, or read too
 
 ## Test tiers — match the weight to the change
 
+Each `test_urls` entry carries its own tier, so one wave can test one route `full` and another `light`.
+
 | Tier | When the orchestrator picks it | Shape | Budget |
 |---|---|---|---|
-| **full** | First test of a new or reworked screen | Acceptance asserts the e2e specs don't cover, and design asserts. Screenshot the narrowest viewport and one desktop viewport (plus the other theme, if the design system has two); at the remaining viewports only run a DOM check (horizontal overflow, key elements present), and skip it when an e2e spec already asserts it | ~40 tool calls |
-| **regression** | A retry after FAIL | `retest_only` checks, plus a smoke load of each `test_url`. Narrowest viewport and one desktop viewport only. Screenshot only what changed | ~20 tool calls |
-| **light** | UI wave with no new visual surface (copy, wiring, a flag) | One viewport, DOM/HTTP asserts, screenshot only on failure | ~10 tool calls |
+| **full** | The route's last wave in the phase — the one full test each screen gets | Acceptance asserts the e2e specs don't cover, and design asserts. Screenshot each viewport in `viewports` (plus the other theme, if the design system has two). No checks at other widths | ~40 tool calls |
+| **regression** | A retry after FAIL (every entry) | `retest_only` checks, plus a smoke load of each `test_url`. Narrowest and widest viewport only. Screenshot only what changed | ~20 tool calls |
+| **light** | An earlier wave that touches a route a later wave in the phase touches again | Narrowest viewport, DOM/HTTP asserts, console and network errors. No design asserts. Screenshot only on failure | ~10 tool calls |
 
-The budget is a guide, not a hard stop. If you're about to pass it, finish the checks that matter most and say in `NOTES` what you left untested — don't keep going. **Never re-test a check that passed in an earlier attempt unless this retry touched it.**
+Mixed tiers: the heaviest tier's budget, plus the light budget for each `light` entry. The budget is a guide, not a hard stop. If you're about to pass it, finish the checks that matter most and say in `NOTES` what you left untested — don't keep going. **Never re-test a check that passed in an earlier attempt unless this retry touched it.**
 
 ### Don't repeat verify
 
-Verify has already run the project's full test suite, including every spec in `e2e_specs`, and they passed. Anything those specs assert — an element renders, a route navigates, no horizontal scroll at 375px, a banner appears for a fixture — is covered. Don't re-check it in the browser. Your job is what a spec can't judge:
+Verify has already run the tests related to this wave's changes, including every spec in `e2e_specs`, and they passed. Anything those specs assert — an element renders, a route navigates, no horizontal scroll at 375px, a banner appears for a fixture — is covered. Don't re-check it in the browser. Your job is what a spec can't judge:
 
 - Does it look right against the project's design system (spacing, type, colour, states), judged from screenshots
 - Acceptance notes no spec asserts
@@ -114,12 +118,12 @@ Every step you take re-reads everything you've read so far, so what you pull int
 ## Execution steps
 
 1. **Read `harness_doc`** if it exists. It's what makes a test cheap: how to start the app, how to sign in as each role, which seed data to use, what not to touch. If it doesn't exist, work those out, and then **create it** (see "Harness doc" below) so the next wave doesn't have to.
-2. **Read assigned skills**, if any, in payload order: Read a path, load a name with the skill tool. Follow their workflows at the depth `tier` allows. Then read the `e2e_specs` files, so you know what's already covered.
+2. **Read assigned skills**, if any, in payload order: Read a path, load a name with the skill tool. Follow their workflows at the depth each URL's tier allows. Then read the `e2e_specs` files, so you know what's already covered.
 3. **Read the `design_sections` of `design_system_doc`**, when present. Use them for the design asserts below. If the file is missing, skip this and note it in RESULT.
 4. **Dev server:** check for an already-running dev server on the expected port. Start one in the background if needed, and wait for the ready URL. If the port is in use, reuse the existing server.
-5. **Run the tests at the tier given**, using the assigned skills. If none are assigned, do a basic manual-style check: navigate to each `test_url`, screenshot it, check the console for errors, check the network tab for failed requests, and resize to each viewport looking for obvious layout breakage.
-6. **Design asserts** (only when `design_system_doc` provided) — spot-check visible UI against **that project's own** design-system.md. Do not invent generic design rules here; every check in this step must trace back to something the project's own design-system.md actually says (colors, type scale, touch target minimums, spacing, copy voice — whatever that file specifies). If `design_system_doc` is absent, skip this step entirely rather than falling back to generic taste.
-   Record failures in `DESIGN_ISSUES`; blocking drift → contribute to `STATUS: FAIL`
+5. **Run each `test_url` at its own tier**, using the assigned skills. If none are assigned, do a basic manual-style check: navigate to each `test_url`, screenshot it, check the console for errors, check the network tab for failed requests, and resize to each viewport the tier allows, looking for obvious layout breakage.
+6. **Design asserts** (only on `full` entries, and only when `design_system_doc` provided) — spot-check visible UI against **that project's own** design-system.md. Do not invent generic design rules here; every check in this step must trace back to something the project's own design-system.md actually says (colors, type scale, touch target minimums, spacing, copy voice — whatever that file specifies). If `design_system_doc` is absent, skip this step entirely rather than falling back to generic taste.
+   Record drift in `DESIGN_ISSUES` → `STATUS: WARN`, never FAIL (see STATUS). Layout breakage is not drift: it's a FAIL
 7. **Map results to wave sprints** — note which sprint's UI broke if identifiable
 8. **If `fix_mode: true`** — apply minimal fixes, re-run failed checks, set STATUS accordingly
 9. **Update `harness_doc`** if you learned something the next test would otherwise have to rediscover — a new fixture recipe, a quirk, a changed sign-in step. Keep it short; replace stale lines rather than appending.
@@ -176,7 +180,7 @@ mkdir -p "$(dirname '{path}')" && printf '{"v":1,"ts":"%s","phase":%d,"wave":%d,
 WAVE TEST RESULT:
 STATUS: PASS | WARN | FAIL
 URLS: [tested URLs]
-VIEWPORTS: [375: PASS, 428: PASS, ...]
+VIEWPORTS: [375: PASS, 1280: PASS]
 CONSOLE_ERRORS: [list or NONE]
 ISSUES: [list or NONE]
 DESIGN_ISSUES: [design-system.md violations or NONE — omit section if no design_system_doc was provided]
@@ -188,8 +192,10 @@ NOTES: [pre-existing warnings, env quirks]
 | STATUS | Meaning |
 |--------|---------|
 | PASS | All required checks passed |
-| WARN | Minor issues (pre-existing console noise, non-blocking layout) — orchestrator logs and continues unless user asked for strict mode |
-| FAIL | Blocking UI/flow/regression/design-system violation — orchestrator must retry implementation (phase-ui-implement for UI sprints) then re-run wave-test |
+| WARN | Design-system drift (spacing, colour, type, token mismatch), or pre-existing console noise. Never triggers a retry — orchestrator lists it at the phase checkpoint for the user to decide. Strict mode: orchestrator treats WARN as FAIL |
+| FAIL | Broken flow, crash, console error, missing acceptance element, or layout breakage (horizontal overflow, overlap, clipped content) — orchestrator must retry implementation (phase-ui-implement for UI sprints) then re-run wave-test |
+
+Drift goes in `DESIGN_ISSUES`, never `FAILURES`. A result with only drift and noise is `WARN`.
 
 ---
 

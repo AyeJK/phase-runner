@@ -1,13 +1,13 @@
 ---
 name: phase-verify
-description: "Per-wave CLI verification for phase-builder. Spawned as a sub-agent after implementation calls return — runs the project's build/typecheck/test commands and sprint acceptance grep patterns, then reviews the wave diff against a contract: a verdict per acceptance criterion, test-integrity checks, and scope against each sprint's Module column. Returns structured VERIFY RESULT. Orchestrator must never run CLI checks directly for verification."
+description: "Per-wave CLI verification for phase-builder. Spawned as a sub-agent after implementation calls return — runs the project's build and typecheck, the tests related to the wave's changes, and sprint acceptance grep patterns, then reviews the wave diff against a contract: a verdict per acceptance criterion, test-integrity checks, and scope against each sprint's Module column. Once per phase, in suite mode, runs the full test suite. Returns structured VERIFY RESULT. Orchestrator must never run CLI checks directly for verification."
 ---
 
 # Phase Verify
 
 Per-wave CLI verification sub-agent. **Read-only for phase plan files** — do not fix app code unless the orchestrator sets `fix_mode: true` (default `false` → report FAIL so the implementation agent fixes).
 
-The **phase-builder orchestrator** spawns you after implementation calls in a wave return. On **data-only** waves you gate doc-sync; on **UI** waves you gate wave-test (doc-sync runs only after wave-test passes).
+The **phase-builder orchestrator** spawns you after implementation calls in a wave return. On **data-only** waves you gate doc-sync; on **UI** waves you gate wave-test (doc-sync runs only after wave-test passes). Once per phase, after the last wave, it spawns you in `mode: "suite"` to run the full test suite (see Suite mode).
 
 ---
 
@@ -15,7 +15,7 @@ The **phase-builder orchestrator** spawns you after implementation calls in a wa
 
 The orchestrator MUST:
 
-1. Spawn **one** verify call per wave (after all implementation calls in the wave return)
+1. Spawn **one** verify call per wave (after all implementation calls in the wave return), plus **one** `mode: "suite"` call at the end of the phase
 2. Wait for `VERIFY RESULT:` before doc-sync (data-only) or before wave-test (UI waves)
 3. On `STATUS: FAIL` — orchestrator re-spawns affected implementation sprint(s) with `FAILURES`, then re-spawns verify until it passes the gate (`PASS`, or `PARTIAL` outside strict mode) or hits the retry limit (default 3, then escalate to user)
 4. Log only one line: `✓ Verify — {sprint ids} ({summary}; criteria {met}/{total} met)` — no CLI commands run directly in the orchestrator thread
@@ -65,14 +65,14 @@ The orchestrator MUST NOT run build/typecheck/test commands, or grep for accepta
 | `project_root` | **app_root** — run all CLI commands from here |
 | `workspace_root` | Coordination folder (optional context; phase file lives here) |
 | `skills_to_follow` | Paths or names — read these first if the project has documented build/test conventions |
-| `verification_cli` per sprint | From sprint `### Verification` `cli:` line; use strictest / union of commands when wave has multiple |
+| `verification_cli` per sprint | From sprint `### Verification` `cli:` line; use strictest / union of commands when wave has multiple. Its test step is narrowed to related tests (see Test selection) |
 | `default_command` | Fallback when no `cli:` hints — resolved by stack detection in project-layout.md, not a fixed universal default |
 | `acceptance_checks` | Optional grep/file-exists checks named in acceptance criteria |
 | `fix_mode` | If `true`, apply minimal fixes and re-run; default `false` → report FAIL |
 | `acceptance` per sprint | Every acceptance criterion, verbatim. Each one gets a verdict in the review contract |
 | `tasks` per sprint | Task text plus its Module cell (`null` when the row has none). Module cells define the sprint's scope; task text decides whether a test change was asked for. `"manual": true` marks a task only the user can do |
 | `diff_base` | Git tree sha marking where this wave started. `null` → diff against `HEAD` at low confidence (see Review contract) |
-| `mode` | `verify` (default) or `baseline` — see Baseline mode |
+| `mode` | `verify` (default), `baseline` — see Baseline mode — or `suite` — see Suite mode |
 | `leak_check` | Worktree mode only. Run `git -C {repo_root} status --porcelain`; any path not in `baseline` means a sub-agent edited the main checkout instead of the worktree → `STATUS: FAIL`, list the paths in `FAILURES` |
 | `run_log` | Optional. When present, append `implement` and `verify` events (see Run log). Absent → write nothing |
 
@@ -83,8 +83,8 @@ The orchestrator MUST NOT run build/typecheck/test commands, or grep for accepta
 1. **Read assigned skills/docs**, if any — follow the project's documented build/test workflow (prefer whatever the project's own scripts define; build only when needed)
 1b. **Log implementation** — if `run_log` is present, append one `implement` line per entry in `run_log.sprint_results` (see [Run log](#run-log)). Run this append now, as its own command, before step 2 — never hold it back to write alongside the `verify` lines. A live viewer reads the `implement` line as "verifying has started"
 2. **Snapshot first** — take `NOW=$(snap)` (see Review contract) *before* running anything, so build and test output never lands in the wave's diff. Report it as `SNAPSHOT`: the orchestrator uses the wave's last passing verify's `SNAPSHOT` as the next wave's `diff_base`. `snap` failed → `SNAPSHOT: NONE — {reason}`, never an empty sha
-2b. **Resolve command** — per sprint `### Verification` `cli:`; if multiple sprints specify different commands, run all required commands in order
-3. **Run CLI checks** — from **app_root** (`project_root`); capture exit code and failure output
+2b. **Resolve command** — per sprint `### Verification` `cli:`; if multiple sprints specify different commands, run all required commands in order. Then narrow the test step to related tests (see [Test selection](#test-selection))
+3. **Run CLI checks** — from **app_root** (`project_root`): build, typecheck, then the selected tests; capture exit code and failure output
 4. **Run acceptance checks** — minimal grep / file-exists patterns from sprint acceptance when specified (not full exploratory QA)
 4b. **Review contract** — run the four checks in [Review contract](#review-contract-step-4b) below against the wave diff. Read the diff, not whole files; read a whole file only to trace one specific suspected problem. Budget: about 35 tool calls for the whole verify. When the budget runs out, mark the remaining criteria `UNVERIFIED` — never guess `MET` or `NOT_MET`.
 4c. **List `E2E_SPECS`** — on UI waves, the end-to-end/browser spec files (Playwright, Cypress and the like) that appear in the wave diff and passed in step 3. Wave-test reads them and skips what they already assert, so only list specs that actually ran
@@ -92,6 +92,30 @@ The orchestrator MUST NOT run build/typecheck/test commands, or grep for accepta
 6. **If `fix_mode: true`** — apply minimal fixes, re-run failed commands, take a new `NOW`, and re-run step 4b so your own fixes get reviewed too
 6b. **Log the verdict** — once STATUS is decided, if `run_log` is present, append one `verify` line per sprint in `wave_sprints`
 7. End with `VERIFY RESULT:` block (required)
+
+---
+
+## Test selection
+
+Per wave, run only the tests related to what the wave changed. The full suite runs once, at the end of the phase (Suite mode).
+
+1. **Changed files:** `git diff --relative --name-only {diff_base} "$NOW"` (the snapshot from step 2).
+2. **Split the command.** If `verification_cli` (or `default_command`) runs the whole suite — e.g. a `check` script chaining typecheck and test — read the script from the manifest and run its non-test parts as they are. Replace only the test step.
+3. **Related tests**, with the stack's runner:
+
+| Runner | Related tests |
+|--------|---------------|
+| Vitest | `npx vitest related --run {changed source files}` |
+| Jest | `npx jest --findRelatedTests {changed source files}` |
+| pytest | Test files for the changed modules, by path (`tests/test_{module}.py`, `{module}_test.py`) |
+| Go | `go test` on the changed packages (`./{dir}/...`) |
+| Cargo | `cargo test -p {changed crates}` |
+| Other | The stack's equivalent, if it has one |
+
+4. **Plus every test file in the wave diff** (new or changed, e2e specs included), run by path.
+5. **No way to select:** the runner has no related-tests option and test files don't map to sources by path, or the command can't be split → run the full suite and say so in NOTES (`tests: full suite — {reason}`).
+
+Report the selection on the `TESTS` line: `24/24 passed (related to 8 changed files)`.
 
 ---
 
@@ -190,9 +214,23 @@ SNAPSHOT: {tree sha, or NONE — reason (e.g. not a git repo)}
 
 ---
 
+## Suite mode
+
+`mode: "suite"` — sent once per phase, after the last wave's doc-sync, and again after each suite retry. `wave_sprints` lists every sprint implemented this run, with tasks and Module cells but no `acceptance`. `run_log.sprint_results` lists the sprints a suite retry just re-implemented (absent on the first run). Write `implement` lines for those and `suite` lines (see Run log), never `verify` ones.
+
+1. If `run_log` is present: append one `implement` line per `sprint_results` entry, as in step 1b, when there are any; then the `suite` `start` lines, as their own command. Then take `NOW=$(snap)`, as in step 2, and run build, typecheck and the **full** test suite from app_root — the commands as they are, no test selection.
+2. No acceptance checks and no review contract: every wave already had both.
+3. **Map each failure to sprints** by path: the failing test file, and the source files its stack trace or imports name, against each sprint's Module cells. A failing test that maps to no sprint, and imports nothing the run changed (`git diff --name-only {diff_base} "$NOW"`, when `diff_base` isn't `null`), may predate the phase: leave it out of `AFFECTED_SPRINTS` and say so in NOTES.
+4. `leak_check` applies as in verify mode.
+5. Once STATUS is decided, if `run_log` is present, append the `suite` result lines.
+
+Return the normal block with `COMMAND`, `TESTS`, `FAILURES` (one line per failure, starting with the sprint id), `AFFECTED_SPRINTS` (sprint ids, or `NONE` when no failure maps to a sprint) and `NOTES`. Set `CRITERIA`, `TEST_INTEGRITY`, `SCOPE` and `E2E_SPECS` to `SKIPPED (suite)`. STATUS is `PASS` or `FAIL` — never `PARTIAL`.
+
+---
+
 ## Run log
 
-Only when the payload has `run_log`. The spec is phase-builder's `run-log.md`; this is the part you need. Append with this exact line, replacing only the `{…}` placeholders and keeping every other character, including the summary's `tr` pipe and `"${RL_FILES:-}"`. `{path}`, `{phase}`, `{wave}`, `{attempt}` and `{max}` come from `run_log`. Never write the log with a file-edit tool.
+Only when the payload has `run_log` (never in baseline mode). The spec is phase-builder's `run-log.md`; this is the part you need. Append with this exact line, replacing only the `{…}` placeholders and keeping every other character, including the summary's `tr` pipe and `"${RL_FILES:-}"`. `{path}`, `{phase}`, `{wave}`, `{attempt}` and `{max}` come from `run_log`. Never write the log with a file-edit tool.
 
 ```sh
 mkdir -p "$(dirname '{path}')" && printf '{"v":1,"ts":"%s","phase":%d,"wave":%d,"sprint":"%s","gate":"%s","result":"%s","attempt":%d,"max":%d,"summary":"%s"%s}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{phase}' '{wave}' '{sprint}' '{gate}' '{result}' '{attempt}' '{max}' "$(printf '%s' '{summary}' | tr '\042\134\011\012\015' "'/   " | tr -d '\000-\037')" "${RL_FILES:-}" >> '{path}'
@@ -200,11 +238,13 @@ mkdir -p "$(dirname '{path}')" && printf '{"v":1,"ts":"%s","phase":%d,"wave":%d,
 
 | When | `gate` | One line per | `result` | `summary` |
 |------|--------|--------------|----------|-----------|
-| Step 1b | `implement` | entry in `run_log.sprint_results` | `blocked` if its `blocked` list is non-empty, else `pass` | `done 1,2,3; blocked 4 — {notes}`. Empty `blocked` list → drop `; blocked …` entirely (`done 1,2 — {notes}`, never `blocked none`); empty notes → drop ` — {notes}` |
+| Step 1b (suite mode: step 1) | `implement` | entry in `run_log.sprint_results` | `blocked` if its `blocked` list is non-empty, else `pass` | `done 1,2,3; blocked 4 — {notes}`. Empty `blocked` list → drop `; blocked …` entirely (`done 1,2 — {notes}`, never `blocked none`); empty notes → drop ` — {notes}` |
 | Step 6b | `verify` | sprint in `wave_sprints` | `fail` if STATUS is FAIL and the sprint is in `AFFECTED_SPRINTS` (or it's `ALL`); `partial` if it has an `UNVERIFIED` criterion or a scope note; else `pass` | on `fail`, its first `FAILURES` line without the sprint id; else `criteria {met}/{total} met`, plus `; {k} unverified` |
+| Suite mode, step 1 | `suite` | sprint in `wave_sprints` | `start` | empty: `'{summary}'` becomes `''` |
+| Suite mode, step 5 | `suite` | sprint in `wave_sprints` | `fail` if STATUS is FAIL and the sprint is in `AFFECTED_SPRINTS`, or on every line when it's `NONE`; else `pass` | on `fail`, its first `FAILURES` line without the sprint id (with `NONE`, the first failure); else the `TESTS` count (`412/412 passed`) |
 
 - Summaries are one line, at most 200 characters. Write a straight apostrophe as `'\''`; type everything else as-is, including `"` and `\`. Never backslash-escape a character: inside single quotes `\"` stays two characters and lands in the log as `/'`.
-- Use a POSIX shell (Git Bash on Windows). Two separate appends: the `implement` lines at step 1b, before any check runs, and the `verify` lines at step 6b. Lines of the same gate can be chained with `&&` in one call; never chain `implement` and `verify` lines together.
+- Use a POSIX shell (Git Bash on Windows). Two separate appends: the `implement` lines at step 1b, before any check runs, and the `verify` lines at step 6b. Suite mode: the `implement` lines (if any), then the `suite` `start` lines, then the `suite` result lines, each its own append. Lines of the same gate can be chained with `&&` in one call; never chain `implement` and `verify` lines together.
 - An append that exits non-zero gets one line in `NOTES` (`run log: append failed — {reason}`). It never changes STATUS.
 
 ---
@@ -215,7 +255,7 @@ mkdir -p "$(dirname '{path}')" && printf '{"v":1,"ts":"%s","phase":%d,"wave":%d,
 VERIFY RESULT:
 STATUS: PASS | FAIL | PARTIAL
 COMMAND: {command actually run}
-TESTS: 42/42 passed
+TESTS: 24/24 passed (related to 8 changed files | full suite)
 CRITERIA:
 - {sprint id} | "{criterion}" | MET | NOT_MET | UNVERIFIED | {evidence file:line, or what would decide it}
 TEST_INTEGRITY: CLEAN | FLAGGED | SKIPPED
@@ -226,8 +266,8 @@ BASE: {diff_base sha, or HEAD} (confidence: high | low)
 SNAPSHOT: {NOW — the tree sha taken in step 2 (or re-taken in fix_mode), or NONE — reason}
 E2E_SPECS: [end-to-end/browser spec files in the wave diff that ran and passed, paths relative to app_root, or NONE]
 FAILURES: [empty or actionable list — CLI failures plus blocking review findings]
-AFFECTED_SPRINTS: [sprint ids, or ALL]
-NOTES: [env quirks, pre-existing warnings]
+AFFECTED_SPRINTS: [sprint ids, or ALL — suite mode: sprint ids, or NONE]
+NOTES: [env quirks, pre-existing warnings, full-suite fallback]
 ```
 
 | STATUS | Meaning |

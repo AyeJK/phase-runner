@@ -316,7 +316,7 @@ describe('deriveRun: wave-test retry', () => {
 
 describe('deriveRun: runs and edge cases', () => {
   it('returns nothing for no events', () => {
-    expect(deriveRun([])).toEqual({ waves: [], escalations: [], sprintHistory: {} });
+    expect(deriveRun([])).toEqual({ waves: [], escalations: [], sprintHistory: {}, suites: [] });
   });
 
   it('starts a new run when the wave number drops', () => {

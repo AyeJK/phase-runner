@@ -30,7 +30,7 @@
  * gate failed stays `running` until something newer is logged, as the model's
  * `failed` state does (see `SprintRunState`).
  */
-import type { Phase, PhaseRuns, Progress, Project, Sprint, SprintRun } from '../../core/model.js';
+import type { Phase, PhaseRuns, Progress, Project, Sprint, SprintRun, SuiteRun } from '../../core/model.js';
 
 /** A sprint's status. See the module comment. */
 export type SprintStatus = 'running' | 'complete' | 'needs' | 'manual' | 'waiting';
@@ -38,6 +38,46 @@ export type SprintStatus = 'running' | 'complete' | 'needs' | 'manual' | 'waitin
 /** The run-log data for a phase, or `null` when it has no run log. */
 export function phaseRuns(project: Project, phase: number): PhaseRuns | null {
   return project.runs.find((r) => r.phase === phase) ?? null;
+}
+
+/**
+ * Where the phase-end full test suite stands in the phase's latest run:
+ * `running` (its start lines are logged, no result yet), `failed` (retries
+ * left, or the run stopped: the viewer doesn't guess which), `retrying` (it
+ * failed and a sprint is being re-implemented), `escalated` (it failed at its
+ * retry limit), `passed`.
+ */
+export type SuiteState = 'running' | 'failed' | 'retrying' | 'escalated' | 'passed';
+
+/**
+ * The phase-end full test suite of the phase's latest run, or `null` when
+ * that run hasn't reached it (or the log predates the suite gate).
+ */
+export function currentSuite(runs: PhaseRuns | null): SuiteRun | null {
+  if (!runs) return null;
+  const latestRun = runs.waves.reduce((max, w) => Math.max(max, w.run), 0);
+  const suites = runs.suites ?? [];
+  const suite = suites[suites.length - 1];
+  return suite && suite.run >= latestRun ? suite : null;
+}
+
+/** See {@link SuiteState}. */
+export function suiteState(suite: SuiteRun): SuiteState {
+  if (suite.latest.result === 'running') return 'running';
+  if (suite.latest.result === 'pass') return 'passed';
+  if (suite.escalated) return 'escalated';
+  return suite.retrying.length > 0 ? 'retrying' : 'failed';
+}
+
+/** Whether a suite state means the run isn't over: running, failed with retries left, or retrying. */
+export function isSuiteActive(state: SuiteState): boolean {
+  return state === 'running' || state === 'failed' || state === 'retrying';
+}
+
+/** The latest run's suite is running, failed with retries left, or retrying: the run isn't over. */
+export function suiteActive(runs: PhaseRuns | null): boolean {
+  const suite = currentSuite(runs);
+  return suite !== null && isSuiteActive(suiteState(suite));
 }
 
 /**

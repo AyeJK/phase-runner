@@ -22,7 +22,7 @@ The gate agents and the implementation agents write it; the orchestrator never d
 
 ## The `run_log` block
 
-phase-builder adds this to the verify, wave-test and doc-sync payloads. A gate that gets no `run_log` block writes nothing and behaves exactly as it did before. The verify baseline call never gets one and never writes.
+phase-builder adds this to the verify, wave-test and doc-sync payloads. A gate that gets no `run_log` block writes nothing and behaves exactly as it did before. The verify baseline call never gets one and never writes. The phase-end suite call (`mode: "suite"`) gets one and writes `suite` lines, plus `implement` lines for the sprints a suite retry re-implemented. Its retry implementers get the implementer's block, with the suite's wave number (see [The suite](#the-suite)).
 
 ```json
 "run_log": {
@@ -46,7 +46,7 @@ phase-builder adds this to the verify, wave-test and doc-sync payloads. A gate t
 | `wave` | all three | The wave's number in this run's execution plan: 1, 2, 3… |
 | `attempt` | all three | See [attempt and max](#attempt-and-max) |
 | `max` | all three | See [attempt and max](#attempt-and-max) |
-| `sprint_results` | verify only | One entry per sprint whose implementation ran since the previous verify in this wave, parsed from its `SPRINT RESULT` |
+| `sprint_results` | verify only | One entry per sprint whose implementation ran since the previous verify in this wave, parsed from its `SPRINT RESULT`. In suite mode, the sprints a suite retry re-implemented; absent on the suite's first run |
 | `diff_base` | doc-sync only | The wave's `diff_base` (the same sha verify got) |
 | `wave_end` | doc-sync only | The `SNAPSHOT` from the wave's last passing verify: the code the wave finished with |
 
@@ -99,8 +99,8 @@ One JSON object per line, UTF-8, `\n`-terminated.
 | `phase` | number | yes | Phase number |
 | `wave` | number | yes | Wave number within the run |
 | `sprint` | string | yes | Sprint id, e.g. `"2.4"`. Every v1 event is about one sprint |
-| `gate` | string | yes | `implement`, `verify`, `wave_test`, `doc_sync` or `task` |
-| `result` | string | yes | `pass`, `partial`, `warn`, `fail`, `blocked` or `start` — which ones each gate uses is below. `start` is only ever on `implement` and `task` |
+| `gate` | string | yes | `implement`, `verify`, `wave_test`, `doc_sync`, `task` or `suite` |
+| `result` | string | yes | `pass`, `partial`, `warn`, `fail`, `blocked` or `start` — which ones each gate uses is below. `start` is only ever on `implement`, `task` and `suite` |
 | `attempt` | number | yes | 1-based attempt of this gate in this wave |
 | `max` | number | yes | Retry limit for this gate; `0` means no limit |
 | `summary` | string | yes | One line, at most 200 characters. May be empty. On a `task` line it is the task number and nothing else |
@@ -116,6 +116,7 @@ One JSON object per line, UTF-8, `\n`-terminated.
 | `verify` | phase-verify | Last thing before `VERIFY RESULT`, one line per sprint in `wave_sprints` | `fail`: STATUS is FAIL and the sprint is in `AFFECTED_SPRINTS` (or it's `ALL`). `partial`: the sprint has a non-blocking finding (an `UNVERIFIED` criterion, a scope note). `pass`: neither |
 | `wave_test` | phase-wave-test | Last thing before `WAVE TEST RESULT`, one line per sprint in `wave_sprints` | `fail` / `warn`: STATUS is FAIL / WARN and the sprint is in `AFFECTED_SPRINTS` (or it's `ALL`). `pass`: otherwise |
 | `doc_sync` | phase-doc-sync | Last thing before `DOC SYNC RESULT`, after its edits, one line per sprint in the payload. The next wave's implementation may already be running: its `start` and `task` lines can come before this line, its `implement` `pass` / `blocked` lines still come after, because verify waits for doc-sync | `pass` if its statuses were applied, `fail` if it's listed in `FAILURES` |
+| `suite` | phase-verify, `mode: "suite"` | The phase-end full test suite (phase-builder 3g), after the last wave's `doc_sync`. Two appends per run of it, one line per sprint in `wave_sprints` each: `start` before any command runs, then the result before `VERIFY RESULT`. `wave` is the suite's own number: see [The suite](#the-suite) | `start` first. Then `fail` if STATUS is FAIL and the sprint is in `AFFECTED_SPRINTS`, or on every line when `AFFECTED_SPRINTS` is `NONE`; else `pass` |
 
 Summaries:
 
@@ -125,6 +126,7 @@ Summaries:
 - `verify`: on `fail`, that sprint's first `FAILURES` line without its sprint-id prefix. Otherwise `criteria {met}/{total} met`, plus `; {k} unverified` when there are any.
 - `wave_test`: on `fail` / `warn`, the sprint's first failure or issue. Otherwise `{n} URLs, {m} viewports`.
 - `doc_sync`: `{k} tasks updated`, or the reason from `FAILURES`.
+- `suite` `start`: empty. `suite` `pass` / `fail`: on `fail`, the sprint's first `FAILURES` line without its sprint-id prefix (with `NONE`, the first failure); otherwise the `TESTS` count, e.g. `412/412 passed`.
 
 ### attempt and max
 
@@ -136,6 +138,7 @@ phase-builder already keeps a retry counter per gate per wave. `attempt` is that
 | `task` | The `attempt` of the `implement` `start` line of the same implementation run | The `max` of that line |
 | `wave_test` | `wave_test_retry_count + 1` | `max_wave_test_retries` (default 3) |
 | `doc_sync` | 1, or n on the n-th doc-sync the user asks for in the same wave | 1 — doc-sync never retries on its own; a failure pauses the run |
+| `suite`, and the `implement` and `task` lines of a suite retry | `suite_retry_count + 1` — 1 on the first run, +1 after each suite FAIL. A retry's implementers carry the attempt of the suite run that follows them | `max_verify_retries` (default 3) |
 
 - The user's "strict — no retry limit" → `max: 0`.
 - Counters reset when a new wave starts and when the user picks "continue retrying" after an escalation, so `attempt` goes back to 1.
@@ -149,6 +152,17 @@ implement start → task start / pass … → implement → verify     attempt 2
 wave_test                                                      UI waves only
 doc_sync                                                       last, and only once every gate has passed
 ```
+
+After the last wave's `doc_sync`, once per phase:
+
+```
+suite start → suite                                            attempt 1
+implement start → task start / pass … → implement → suite start → suite    attempt 2 (after a suite FAIL: only the re-implemented sprints get implement lines)
+```
+
+### The suite
+
+The phase-end suite and its retries log under their own wave number: the run's last wave number + 1. No real wave has it, so a reader can keep every line with that number out of the waves, and an earlier wave's sprint re-implemented for the suite never lands in the last wave. phase-builder passes it as `wave` to the suite verify and to each retry implementer. Within that number the lines follow the usual shapes: the implementer's `implement` `start` and `task` lines, then phase-verify's `implement` lines for the re-implemented sprints (from `sprint_results`), then the `suite` lines.
 
 In a multi-sprint wave each implementer writes its own `start` line, so the wave's `start` lines come first, in whatever order the implementers got to them. On a retry only the re-implemented sprints get a new `start` line; phase-verify's `implement` lines cover the same sprints.
 
@@ -222,5 +236,5 @@ For tools that consume it:
 - `task` lines are markers like `implement` `start`: never count one as an attempt, a retry or a gate result, and never let one cut a wave or move a wave's start or end. Place each one the way a `start` line is placed, in the wave its `wave` names. Skip a `task` line whose `summary` isn't a whole number, and ignore a task number the sprint doesn't have.
 - For each sprint in a wave, the latest `task` line per task number says where that task stands: `start` means the implementer is working on it, `pass` means it is built and not yet verified. The gates still decide whether the work passes, and a task is done only when doc-sync marks it in the phase file, so drop what the `task` lines say once the sprint's `doc_sync` line lands. A `start` with no `pass` after it when the sprint's `implement` result line lands is not a running task any more: the implementer left it unfinished, or its `pass` append failed.
 - A log may have no `task` lines at all (runs logged before implementers wrote them, an implementation prompt with no `RUN LOG` section, or failed appends). Everything else reads the same with or without them.
-- Parallel implementers append at nearly the same moment. Each line is one short `>>` write; the skip-unparseable rule above covers the rare garbled one.
+- `suite` lines are markers too: never part of a wave, never a gate step of a sprint's wave, and never a cut. They belong to the run of the line before them. Once a run has a `suite` line, every later `implement` and `task` line in that run with the same `wave` belongs to the suite (a retry), not to a wave. Each run of the suite is one `start` set followed by one result set; the latest set says where the suite stands: `start` alone is running, any `fail` is failed, else passed. After a `fail`, a sprint's `implement` `start` means it is being re-implemented. A `fail` at `attempt >= max` (with `max > 0`) and no later line in the log is an escalation.- Parallel implementers append at nearly the same moment. Each line is one short `>>` write; the skip-unparseable rule above covers the rare garbled one.
 - Wave start, wave end and escalation are derived from the events, never logged as events of their own.

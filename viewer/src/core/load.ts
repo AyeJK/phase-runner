@@ -264,7 +264,7 @@ export async function loadRunLog(
     bytes = await readFile(file);
   } catch (err) {
     return {
-      runs: { phase, file, events: [], waves: [], escalations: [], sprintHistory: {} },
+      runs: { phase, file, events: [], waves: [], escalations: [], sprintHistory: {}, suites: [] },
       warnings: [{ file, line: 0, raw: '', message: `Could not read run log (${errorCode(err)})` }],
     };
   }

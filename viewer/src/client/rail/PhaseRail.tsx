@@ -17,6 +17,8 @@
  * - One section per rail group from `railView`: a heading line ("Wave 2 ·
  *   Running · Parallel · 12 min so far · 1 retry", or "No run log" / "Not run
  *   yet") over one bordered list of sprint rows (dashed for "Not run yet").
+ * - Once the latest run reaches it, the phase-end full test suite: a heading
+ *   line in the same style, plus one red row per sprint it failed on.
  *
  * Rows start collapsed except the running ones (a gate running, or a failed
  * one about to be retried; a sprint that starts running later opens as it
@@ -32,7 +34,9 @@
  * item), `rail-retries`, `phase-time`, `phase-worktree`, `phase-status-bar`,
  * `section[data-rail-row]` (with `data-kind`, `data-row-state`), `wave-name`,
  * `wave-live`, `wave-mode`, `wave-duration`, `wave-retries`,
- * `escalation-banner`, `run-end` (with `data-kind`), plus those in `SprintCard.tsx`.
+ * `escalation-banner`, `run-end` (with `data-kind`), `suite` (with
+ * `data-state`), `suite-name`, `suite-state`, `suite-duration`,
+ * `suite-failure` (with `data-sprint`), plus those in `SprintCard.tsx`.
  */
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Escalation, Phase, Project, WorktreeRef } from '../../core/model.js';
@@ -44,7 +48,16 @@ import { ESCALATION_TEXT, escalationTitle } from '../live/derive.js';
 import { paths, useRouter } from '../shell/router.js';
 import { ParseWarnings } from '../states/ParseWarnings.js';
 import { pageWarningFiles } from '../states/warnings.js';
-import { isActiveState, railView, runEnd, type PhaseMeta, type RailRow, type RailView, type RunEnd } from './derive.js';
+import {
+  isActiveState,
+  railView,
+  runEnd,
+  type PhaseMeta,
+  type RailRow,
+  type RailView,
+  type RunEnd,
+  type SuiteView,
+} from './derive.js';
 import { SprintCard } from './SprintCard.js';
 import './rail.css';
 
@@ -59,7 +72,7 @@ export function PhaseRail({ project, phase, headingLevel = 1 }: PhaseRailProps) 
   // Re-derived on every update, and each minute while a wave runs.
   const [tick, setTick] = useState(0);
   const view = useMemo(() => railView(project, phase, Date.now()), [project, phase, tick]);
-  const running = view.rows.some((r) => r.state === 'running');
+  const running = view.rows.some((r) => r.state === 'running') || view.suite?.state === 'running' || view.suite?.state === 'retrying';
   useEffect(() => {
     if (!running) return;
     const timer = window.setInterval(() => setTick((t) => t + 1), 60_000);
@@ -140,8 +153,66 @@ export function PhaseRail({ project, phase, headingLevel = 1 }: PhaseRailProps) 
             </ul>
           </section>
         ))}
+        {view.suite && <SuiteSection suite={view.suite} Heading={WaveHeading} />}
       </div>
     </div>
+  );
+}
+
+/**
+ * The phase-end full test suite, under the last wave: a heading line like a
+ * wave's ("Full test suite · Passed · 412/412 passed · 3 min"), quiet once it
+ * passes, blue while it runs or a failed sprint is re-implemented. A failure
+ * lists each sprint it failed on, with the failure as logged, in red (pink at
+ * the retry limit) until an attempt passes. Links go to the sprint's row.
+ */
+function SuiteSection({ suite, Heading }: { suite: SuiteView; Heading: 'h2' | 'h3' }) {
+  const items: ReactNode[] = [
+    <b key="name" data-testid="suite-name">
+      Full test suite
+    </b>,
+  ];
+  if (suite.state === 'running' || suite.state === 'retrying') {
+    items.push(
+      <span key="state" className="live" data-testid="suite-state">
+        <StatusIcon kind="run" />
+        {suite.stateText}
+      </span>,
+    );
+  } else {
+    items.push(
+      <span key="state" className={`suite-state ${suite.state}`} data-testid="suite-state">
+        {suite.stateText}
+      </span>,
+    );
+  }
+  if (suite.attemptText !== null) items.push(<span key="attempt">{suite.attemptText}</span>);
+  if (suite.state === 'passed' && suite.summary !== '') items.push(<span key="summary">{suite.summary}</span>);
+  items.push(
+    <span key="dur" data-testid="suite-duration">
+      {suite.durationText}
+    </span>,
+  );
+  const failedLook = suite.state === 'escalated' ? 'needs' : 'failed';
+  return (
+    <section className="wave suite" aria-label="Full test suite" data-testid="suite" data-state={suite.state}>
+      <Heading className="wave-h">
+        <Dotted items={items} />
+      </Heading>
+      {suite.failures.length > 0 && (
+        <ul className="suite-failures">
+          {suite.failures.map((f) => (
+            <li key={f.sprint} className={`run-note ${failedLook}`} data-testid="suite-failure" data-sprint={f.sprint}>
+              <StatusIcon kind={suite.state === 'escalated' ? 'needs' : 'fail'} />
+              <b>
+                <a href={`#${paths.sprintSection(encodeURIComponent(f.sprint))}`}>Sprint {f.sprint}</a>
+              </b>
+              {f.summary !== '' && <code>{f.summary}</code>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

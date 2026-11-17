@@ -235,7 +235,7 @@ Placed after `### Dependencies` (before the sprint `---` divider). Gives phase-b
 - cli: npm run check
 - ui: /settings/profile
 - skills: visual-qa-testing, responsive-testing
-- viewports: 375, 428, 768, 1280, 1536
+- viewports: 375, 1280
 - assert: Profile form saves without a full reload; validation errors appear inline
 ```
 
@@ -246,7 +246,7 @@ Placed after `### Dependencies` (before the sprint `---` divider). Gives phase-b
 | `cli:` | Yes (or infer from stack — see project-layout.md) | Command **phase-verify** sub-agent runs until exit 0 |
 | `ui:` | When sprint has UI | App route(s) for wave-test — comma-separate multiple |
 | `skills:` | When UI or QA | Skill names phase-builder assigns to wave-test (e.g. `visual-qa-testing`, `responsive-testing`) — only if such skills are actually available; see skill-router.md |
-| `viewports:` | Optional | Breakpoints for responsive testing; omit to use a sensible default (375–1536) |
+| `viewports:` | Optional | Breakpoints for responsive testing; omit to use the default, 375 and 1280. List more only when the layout changes at another width |
 | `skip-ui:` | Data-only sprints | `true` — no wave-test after this sprint's wave |
 | `assert:` | Recommended for UI | Short browser checklist — what PASS means |
 

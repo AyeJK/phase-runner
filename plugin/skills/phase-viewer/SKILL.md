@@ -23,7 +23,7 @@ Check the environment with a shell command, e.g. `echo "${CLAUDE_CODE_REMOTE:-}"
 
   ```
   cd <your local checkout>
-  npx phase-viewer
+  npx phase-viewer@latest
   ```
 
   It prints a URL to open; Ctrl+C stops it. Stop here.
@@ -48,7 +48,7 @@ Settle this before starting. When the CLI can't settle on a folder itself, it st
 From the project folder, run:
 
 ```bash
-cd "<project folder>" && npx --yes phase-viewer --json
+cd "<project folder>" && npx --yes phase-viewer@latest --json
 ```
 
 Use the host's background mode for this command, e.g. `run_in_background: true` on Claude Code's Bash tool. The call returns at once with a task id and an output file.
@@ -56,6 +56,7 @@ Use the host's background mode for this command, e.g. `run_in_background: true` 
 - **Use Bash, not PowerShell, on Windows.** A viewer started from a Bash background task keeps running after that task or the session ends. The PowerShell tool's background task takes the whole process tree down with it, so the viewer would die when the task stops.
 - **Don't stop the task afterwards.** It isn't needed, and it doesn't stop the viewer anyway. The viewer runs until its process is ended or the machine restarts.
 - `--yes` skips npx's install prompt the first time the package is downloaded.
+- `@latest` makes npx check for a newer release instead of reusing the copy it cached the first time. A newer viewer that finds an older one running for the project stops it and takes over, so the run log's newer events are always read by a viewer that knows them.
 - **No background shell** (the host can't run a command in the background): go to the fallback below.
 
 ## Step 4: Wait for the URL
@@ -87,7 +88,7 @@ When the viewer can't be started from here (no background shell, a CLI or npm er
 
 ```
 cd "<project folder>"
-npx phase-viewer
+npx phase-viewer@latest
 ```
 
 It prints the URL to open, and Ctrl+C stops it. If a background task from Step 3 is still running (e.g. still downloading), leave it: if it finishes, it will be the running viewer, and the next "open the viewer" returns its URL.

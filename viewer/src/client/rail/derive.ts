@@ -43,6 +43,7 @@
  * | Needs you (`needs-you`, pink) | A task is blocked, or the sprint's latest wave ended in an escalation |
  * | Needs you (`manual`, violet) | The sprint has started (a task done or running, or run events for it) and its manual tasks are all that's left: every other task is done and no gate is running for it. Blocked wins when both apply |
  * | Waiting | The sprint passed verify or the wave test, but a sibling in its wave hasn't, so the wave's next gate can't run yet (typically the sibling is retrying) |
+ * | Suite failed (red), Re-implementing, Suite retesting | The latest run's full test suite failed on the sprint, and where its retry has got to (see {@link suiteCardState}). At the suite's retry limit: Needs you (pink) |
  * | Verify failed, Wave test failed (red) | The sprint's latest step in the phase's latest run is a failed verify or wave test with retries left (not escalated), and the retry hasn't started |
  * | Implementing, Verifying, Wave testing, Doc syncing | The sprint's derived next gate in the phase's latest run |
  * | Re-implementing, Re-verifying, Wave retesting | The same, when that gate already ran for the sprint in this wave: a retry after a failure (or a re-check after a sibling's) |
@@ -53,9 +54,16 @@
  * So a sprint with a manual task reads Implementing, Verifying and so on
  * while it is built, and Needs you only once the agents' tasks are done.
  *
+ * **Full test suite.** The phase-end suite of the latest run (see
+ * {@link SuiteView}) is one line under the last wave. While it runs or has
+ * failed with retries left, the run isn't over: the meta line reads its
+ * state, there's no run-end banner, and the phase is in progress. At its
+ * retry limit it needs you.
+ *
  * **Run notes** per sprint, in log order across every wave it ran in: each
  * failed attempt (with how it was resolved, once a later run of the same
- * gate passed), and each `partial` or `warn` result as "passed with notes".
+ * gate passed), each full test suite attempt that failed on the sprint, and
+ * each `partial` or `warn` result as "passed with notes".
  * While a failure is being retried, the open card also shows it under the
  * tasks table (see {@link currentFailure}).
  *
@@ -76,10 +84,21 @@ import type {
   Sprint,
   SprintRun,
   SprintRunState,
+  SuiteRun,
   WaveRun,
 } from '../../core/model.js';
 import { isStartMarker } from '../../core/derive/run.js';
-import { currentSprintRun, phaseRuns, sprintRan, sprintStatus } from '../data/status.js';
+import {
+  currentSprintRun,
+  currentSuite,
+  isSuiteActive,
+  phaseRuns,
+  sprintRan,
+  sprintStatus,
+  suiteActive,
+  suiteState,
+  type SuiteState,
+} from '../data/status.js';
 import { formatTime, GATE_NAMES, plural } from '../format.js';
 import { attemptNotes, attemptTitle, resolutionText, type AttemptResolution } from '../live/derive.js';
 import { phaseBadge } from '../sprint/status.js';
@@ -99,6 +118,8 @@ export type SprintState =
   | 're-wave-testing'
   | 'verify-failed'
   | 'wave-test-failed'
+  | 'suite-failed'
+  | 'suite-retesting'
   | 'complete'
   | 'waiting'
   | 'not-started'
@@ -116,6 +137,8 @@ export const SPRINT_STATE_TEXT: Record<SprintState, string> = {
   're-wave-testing': 'Wave retesting',
   'verify-failed': 'Verify failed',
   'wave-test-failed': 'Wave test failed',
+  'suite-failed': 'Suite failed',
+  'suite-retesting': 'Suite retesting',
   complete: 'Complete',
   waiting: 'Waiting',
   'not-started': 'Not started',
@@ -132,10 +155,11 @@ const GATE_STATES: ReadonlySet<SprintState> = new Set<SprintState>([
   're-implementing',
   're-verifying',
   're-wave-testing',
+  'suite-retesting',
 ]);
 
-/** Card states after a failed verify or wave test with retries left: the failed (red) look. */
-const FAILED_STATES: ReadonlySet<SprintState> = new Set<SprintState>(['verify-failed', 'wave-test-failed']);
+/** Card states after a failed verify, wave test or full test suite with retries left: the failed (red) look. */
+const FAILED_STATES: ReadonlySet<SprintState> = new Set<SprintState>(['verify-failed', 'wave-test-failed', 'suite-failed']);
 
 /** Whether a card state is one of the gate (running) states. */
 export function isGateState(state: SprintState): boolean {
@@ -253,6 +277,52 @@ export interface RailView {
   summaryText: string | null;
   /** The phase page's meta line. See {@link PhaseMeta}. */
   meta: PhaseMeta;
+  /** The latest run's phase-end full test suite, or `null` when the run hasn't reached it. */
+  suite: SuiteView | null;
+}
+
+/** The phase-end full test suite line under the last wave. */
+export interface SuiteView {
+  state: SuiteState;
+  /** "Running", "Passed", "Failed", "Retrying", "Retry limit reached". */
+  stateText: string;
+  /** "Attempt 2 of 3" on a retry or a failure; `null` on a first attempt that runs or passes. */
+  attemptText: string | null;
+  /** "3 min", "1 min so far"; "start not logged" never happens here (an attempt starts at its first line). */
+  durationText: string;
+  /** The sprints the latest attempt failed on, each with its failure as logged, in first-seen order. Empty unless failed, retrying or escalated. */
+  failures: Array<{ sprint: string; summary: string }>;
+  /** The test count on a pass, the first failure on a fail, as logged. Empty while running. */
+  summary: string;
+}
+
+const SUITE_TEXT: Record<SuiteState, string> = {
+  running: 'Running',
+  passed: 'Passed',
+  failed: 'Failed',
+  retrying: 'Retrying',
+  escalated: 'Retry limit reached',
+};
+
+/** The latest run's suite as its rail line, or `null`. */
+export function suiteView(runs: PhaseRuns | null, now: number = Date.now()): SuiteView | null {
+  const suite = currentSuite(runs);
+  if (!suite) return null;
+  const state = suiteState(suite);
+  const { latest } = suite;
+  const failedNow = state === 'failed' || state === 'retrying' || state === 'escalated';
+  const retry = latest.attempt > 1 || failedNow;
+  return {
+    state,
+    stateText: SUITE_TEXT[state],
+    attemptText: retry ? (latest.max > 0 ? `Attempt ${latest.attempt} of ${latest.max}` : `Attempt ${latest.attempt}`) : null,
+    durationText: waveDurationText(
+      { state: state === 'running' ? 'running' : 'done', startedAt: latest.startedAt, endedAt: latest.updatedAt },
+      now,
+    ),
+    failures: failedNow ? latest.failures : [],
+    summary: latest.summary,
+  };
 }
 
 /**
@@ -347,6 +417,7 @@ export function railView(project: Project, phase: Phase, now: number = Date.now(
       retries: 0,
       summaryText: null,
       meta: phaseMeta(project, phase, null, rows, now),
+      suite: null,
     };
   }
 
@@ -385,7 +456,7 @@ export function railView(project: Project, phase: Phase, now: number = Date.now(
   if (notRun.length > 0) rows.push(dashedRow('not-run', planOrder(notRun.map((s) => s.id))));
 
   const waveRows = rows.filter((r) => r.kind === 'wave');
-  const retries = waveRows.reduce((n, r) => n + r.retries, 0);
+  const retries = waveRows.reduce((n, r) => n + r.retries, 0) + (currentSuite(runs)?.retries ?? 0);
   return {
     phase: phase.number,
     hasRunLog: true,
@@ -394,6 +465,7 @@ export function railView(project: Project, phase: Phase, now: number = Date.now(
     retries,
     summaryText: `${plural(waveRows.length, 'wave')} · ${plural(retries, 'retry', 'retries')}`,
     meta: phaseMeta(project, phase, runs, rows, now),
+    suite: suiteView(runs, now),
   };
 }
 
@@ -441,15 +513,17 @@ export function phaseMeta(
   const waveRows = rows.filter((r) => r.kind === 'wave');
   const minutes = totalMinutes(waveRows, now);
   const waves = plural(waveRows.length, 'wave');
-  const retries = waveRows.reduce((n, r) => n + r.retries, 0);
+  const retries = waveRows.reduce((n, r) => n + r.retries, 0) + (currentSuite(runs)?.retries ?? 0);
   const ended =
     waveRows.length > 0 &&
     waveRows.every((r) => r.state === 'done') &&
-    !rows.some((r) => r.sprints.some((s) => isActiveState(s.state)));
+    !rows.some((r) => r.sprints.some((s) => isActiveState(s.state))) &&
+    !suiteActive(runs);
 
   let timeText: string | null = null;
   if (ended) {
-    const end = latest(waveRows.map((r) => r.endedAt));
+    const suite = currentSuite(runs);
+    const end = latest([...waveRows.map((r) => r.endedAt), suite?.latest.updatedAt ?? null]);
     if (end !== null) timeText = `Finished ${formatWhen(end, now)}`;
   } else if (runs.waves.length > 0) {
     const run = Math.max(...runs.waves.map((w) => w.run));
@@ -636,6 +710,7 @@ function railSprint(project: Project, sprint: Sprint, runs: PhaseRuns | null): R
   const run = currentSprintRun(runs, sprint.id);
   const state = cardState(sprint, progress, run, sprintRan(runs, sprint.id), runs);
   const notes = runNotes(runs, sprint.id);
+  const fromSuite = state !== 'needs-you' && suiteCardState(runs, sprint.id) === state;
   return {
     id: sprint.id,
     title: sprint.title,
@@ -646,8 +721,24 @@ function railSprint(project: Project, sprint: Sprint, runs: PhaseRuns | null): R
     progress,
     run,
     runNotes: notes,
-    failure: currentFailure(state, run, notes),
+    failure: fromSuite ? suiteFailure(state, currentSuite(runs), notes) : currentFailure(state, run, notes),
   };
+}
+
+/**
+ * The full test suite failure a sprint is retrying, for a card whose state
+ * comes from the suite ({@link suiteCardState}): its latest unresolved suite
+ * note in the suite's run, with where the retry has got to.
+ */
+export function suiteFailure(state: SprintState, suite: SuiteRun | null, notes: readonly RunNote[]): CurrentFailure | null {
+  if (!suite) return null;
+  const note = [...notes].reverse().find((n) => n.kind === 'failed' && n.gate === 'suite' && n.run === suite.run && n.resolution === null);
+  if (!note) return null;
+  if (state === 'suite-failed') {
+    const left = suite.latest.max - note.attempt;
+    return { note, statusText: suite.latest.max > 0 && left > 0 ? `Retry next · ${plural(left, 'attempt')} left` : 'Retry next' };
+  }
+  return { note, statusText: state === 're-implementing' ? RETRY_STATUS['re-implementing']! : 'Running the full test suite again' };
 }
 
 /** Where a retry has got to, under the failure it's fixing. */
@@ -719,11 +810,37 @@ export function cardState(
   const status = sprintStatus(sprint, progress, run, ran);
   if (status === 'needs') return 'needs-you';
   if (status === 'manual') return 'manual';
+  const suite = suiteCardState(runs, sprint.id);
+  if (suite !== null) return suite;
   if (heldByWave(runs, run)) return 'waiting';
   const gate = runningGate(run);
   if (gate !== null) return gate;
   if (status === 'complete') return 'complete';
   return (progress?.done ?? 0) > 0 ? 'waiting' : 'not-started';
+}
+
+/**
+ * The card state the latest run's full test suite gives a sprint, or `null`
+ * when it says nothing about it (no suite, passed, or the sprint isn't one it
+ * failed on or re-checks):
+ *
+ * | State | When |
+ * |-------|------|
+ * | Needs you | The suite failed on the sprint at its retry limit |
+ * | Re-implementing | The sprint's retry started (`implement` `start`) after the suite failed |
+ * | Suite retesting | Its retry finished, or the attempt now running re-checks it |
+ * | Suite failed | The suite's latest attempt failed on it, and the retry hasn't started |
+ */
+export function suiteCardState(runs: PhaseRuns | null, sprintId: string): SprintState | null {
+  const suite = currentSuite(runs);
+  if (!suite) return null;
+  const { latest } = suite;
+  if (latest.result === 'running') return latest.retried.includes(sprintId) ? 'suite-retesting' : null;
+  if (latest.result !== 'fail') return null;
+  const retry = suite.retrying.find((r) => r.sprint === sprintId);
+  if (retry) return retry.state === 'implementing' ? 're-implementing' : 'suite-retesting';
+  if (!latest.failures.some((f) => f.sprint === sprintId)) return null;
+  return suite.escalated ? 'needs-you' : 'suite-failed';
 }
 
 /** {@link cardState} looked up from the project. */
@@ -768,11 +885,19 @@ export function runEnd(view: RailView): RunEnd | null {
   if (waves.length === 0 || waves.some((r) => r.state !== 'done')) return null;
   const sprints = view.rows.flatMap((r) => r.sprints);
   if (sprints.some((s) => isActiveState(s.state))) return null;
+  if (view.suite && isSuiteActive(view.suite.state)) return null;
 
   const items: string[] = [];
   let tasks = 0;
   let escalations = 0;
   let needs = false;
+  if (view.suite?.state === 'escalated') {
+    const ids = view.suite.failures.map((f) => f.sprint);
+    const on = ids.length > 0 ? ` on sprint ${ids.join(', ')}` : '';
+    items.push(`${GATE_NAMES.suite} retry limit reached${on}`);
+    escalations++;
+    needs = true;
+  }
   for (const s of sprints) {
     if (s.run?.escalation) {
       items.push(`Sprint ${s.id} · ${GATE_NAMES[s.run.escalation.gate]} retry limit reached`);
@@ -888,7 +1013,33 @@ export function runNotes(runs: PhaseRuns | null, sprintId: string): RunNote[] {
       }
     }
   }
-  return notes;
+  for (const suite of runs?.suites ?? []) {
+    suite.history.forEach((a, i) => {
+      const failure = a.failures.find((f) => f.sprint === sprintId);
+      if (a.result !== 'fail' || !failure) return;
+      const passed = suite.history.slice(i + 1).find((later) => later.result === 'pass');
+      const resolution: AttemptResolution | null = passed
+        ? { implementAttempt: null, gate: 'suite', attempt: passed.attempt, ts: passed.updatedAt }
+        : null;
+      notes.push({
+        kind: 'failed',
+        gate: 'suite',
+        result: 'fail',
+        attempt: a.attempt,
+        run: suite.run,
+        // The suite runs after the last wave and belongs to none.
+        wave: 0,
+        ts: a.updatedAt,
+        time: formatTime(a.updatedAt),
+        title: `${GATE_NAMES.suite} attempt ${a.attempt} failed`,
+        summary: failure.summary,
+        resolution,
+        resolutionText: resolution ? resolutionText(resolution) : null,
+        line: a.lastLine,
+      });
+    });
+  }
+  return notes.sort((a, b) => a.line - b.line);
 }
 
 // ---------------------------------------------------------------------------
@@ -905,7 +1056,10 @@ export function phaseGroup(project: Project, phase: Phase): PhaseGroup {
   const progress = project.progress.byPhase[String(phase.number)];
   const runs = phaseRuns(project, phase.number);
   // Card states, not `sprintStatus`: a complete sprint whose gate is running again is busy.
-  const busy = phase.sprints.some((s) => isBusy(sprintCardState(project, s)));
+  const suite = currentSuite(runs);
+  const busy =
+    phase.sprints.some((s) => isBusy(sprintCardState(project, s))) ||
+    (suite !== null && suiteState(suite) !== 'passed');
   const complete = progress !== undefined && progress.eligible > 0 && progress.done === progress.eligible;
   if (complete && !busy) return 'complete';
   const started = hasWork(progress) || (runs !== null && runs.events.length > 0);
