@@ -1,3 +1,8 @@
+# Plan template
+
+The plan page product-planner writes. Copy everything inside the fence below into the plan's `.html` file, without the fence lines.
+
+```html
 <!doctype html>
 <html lang="en">
 <head>
@@ -701,3 +706,5 @@ First phase goal: {first phase goal}.</pre>
 </script>
 </body>
 </html>
+
+```

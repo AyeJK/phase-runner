@@ -63,7 +63,7 @@ This context informs the data flow diagram, option feasibility, and technical de
 
 ## Step 3 — Generate the HTML Plan
 
-Write a single self-contained HTML file, starting from [template.html](template.html) in this skill's folder. Follow the structure below precisely. All CSS and JS stay inline; the only outside request is the template's Google Fonts link, and the page must read correctly without it. The file must open correctly in a browser with no server.
+Write a single self-contained HTML file, starting from the HTML in [template.md](template.md) in this skill's folder. Follow the structure below precisely. All CSS and JS stay inline; the only outside request is the template's Google Fonts link, and the page must read correctly without it. The file must open correctly in a browser with no server.
 
 ### File naming
 
@@ -152,7 +152,7 @@ The path is always the file in `docs/`, never an artifact link.
 
 ### HTML design guidelines
 
-The plan's look is fixed by [template.html](template.html): it matches phase-viewer, so a plan and the build dashboard read as one tool. Copy the template's `<head>`, `<style>` and `<script>` unchanged and write the content into its markup patterns. Don't restyle it, and don't add CSS for something the template already has a class for. If the plan needs something the template lacks, add a small rule that uses the template's tokens.
+The plan's look is fixed by [template.md](template.md): it matches phase-viewer, so a plan and the build dashboard read as one tool. Copy the template's `<head>`, `<style>` and `<script>` unchanged and write the content into its markup patterns. Don't restyle it, and don't add CSS for something the template already has a class for. If the plan needs something the template lacks, add a small rule that uses the template's tokens.
 
 The plan has to read correctly in two places: opened from disk, and hosted as an artifact (Step 4). The template already handles both; keep these rules when adding anything:
 
