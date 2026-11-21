@@ -1,6 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "phase-runner",
+  "version": "1.0.0",
   "description": "Your whole product team, not just a coding agent. Plan → design → build → QA, with you as the PM who signs off.",
   "author": {
     "name": "Jeremy Kaye",
