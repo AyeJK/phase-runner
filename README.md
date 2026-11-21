@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/social-preview-grid.gif" alt="Phase Runner: your whole product team, not just a coding agent. The stages Idea, Design, Plan, Build and QA light up in turn, then Sign off turns green." width="100%">
+  <img src="https://github.com/AyeJK/phase-runner/releases/download/readme-assets/social-preview-grid.gif" alt="Phase Runner: your whole product team, not just a coding agent. The stages Idea, Design, Plan, Build and QA light up in turn, then Sign off turns green." width="100%">
 </p>
 
 # Phase Runner
@@ -50,7 +50,7 @@ This copies the same nine skills into your project, without the `phase-runner:` 
 ## How it works
 
 <p align="center">
-  <img src="docs/how-it-works.gif" alt="How Phase Runner works, one stage at a time, using phase-viewer's own build. Idea: product-planner writes the plan and weighs three options for who writes the run log, picking A3. Design: design-planner locks the palette, type and status badges. Plan: phase-planner lists seven phases and splits Phase 2 into sprints 2.1 to 2.5, with acceptance criteria. Build: phase-builder runs the sprints in four waves, with 2.2 and 2.3 in parallel, each on a fresh sub-agent. QA: verify fails Sprint 2.3 on two tests, retries with the failure attached, and passes. Sign off: Phase 2 ends at 27 of 28 tasks with one needing you, and you approve." width="100%">
+  <img src="https://github.com/AyeJK/phase-runner/releases/download/readme-assets/how-it-works.gif" alt="How Phase Runner works, one stage at a time, using phase-viewer's own build. Idea: product-planner writes the plan and weighs three options for who writes the run log, picking A3. Design: design-planner locks the palette, type and status badges. Plan: phase-planner lists seven phases and splits Phase 2 into sprints 2.1 to 2.5, with acceptance criteria. Build: phase-builder runs the sprints in four waves, with 2.2 and 2.3 in parallel, each on a fresh sub-agent. QA: verify fails Sprint 2.3 on two tests, retries with the failure attached, and passes. Sign off: Phase 2 ends at 27 of 28 tasks with one needing you, and you approve." width="100%">
 </p>
 
 When you run a phase, `phase-builder` groups sprints into parallel-safe waves and gives each sprint a fresh sub-agent. Every sprint carries acceptance criteria, and UI sprints build against your design system. After every wave, `phase-verify` runs your build, typecheck and the tests related to the wave's changes and reviews the diff against every acceptance criterion, and `phase-wave-test` checks UI work in a browser against your design system. The full test suite runs once, at the end of the phase. A failed wave retries the same sprint with the failure attached, up to three times, then escalates to you. Only `phase-doc-sync` writes status back to the phase file, so the plan always matches what actually passed. Nothing ships past you.
@@ -62,7 +62,7 @@ Want two phases going at once? Say *"run phase 4 in a worktree"* in a second ses
 [`phase-viewer`](viewer/) is a local dashboard for tracking your phases, sprints and tasks. Monitor your phase builds, wave progress, verification failures and anything that needs your attention. It updates as the files change, and it only reads your project, never writes to it.
 
 <p align="center">
-  <img src="docs/phase-viewer.gif" alt="phase-viewer during Phase 2 of its own build, after typing run phase 2. Sprint 2.1 is already complete. Sprints 2.2 and 2.3 build in parallel in wave 2. 2.3 fails verify on two tests with CRLF line endings, and 2.2 waits while 2.3 retries with the failure attached and passes. Wave 3 builds 2.4. In wave 4, 2.5 stops on a blocked task that needs your call, and the phase reads 27 of 28 tasks with 1 task blocked." width="100%">
+  <img src="https://github.com/AyeJK/phase-runner/releases/download/readme-assets/phase-viewer.gif" alt="phase-viewer during Phase 2 of its own build, after typing run phase 2. Sprint 2.1 is already complete. Sprints 2.2 and 2.3 build in parallel in wave 2. 2.3 fails verify on two tests with CRLF line endings, and 2.2 waits while 2.3 retries with the failure attached and passes. Wave 3 builds 2.4. In wave 4, 2.5 stops on a blocked task that needs your call, and the phase reads 27 of 28 tasks with 1 task blocked." width="100%">
 </p>
 
 <sub>Animated from the run log of Phase 2 of this repo's own build: the real sprints, the verify failure and retry, and the blocker.</sub>
